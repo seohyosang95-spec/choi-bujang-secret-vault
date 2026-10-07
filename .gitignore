@@ -1,4 +1,5 @@
 artifacts/
+/supabase/step2-notes.sql
 bundle-notes.json
 .env
 .env.*
