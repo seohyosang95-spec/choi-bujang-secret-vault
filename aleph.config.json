@@ -1,5 +1,5 @@
 {
-  "step": 4,
+  "step": 5,
   "repoUrl": "https://github.com/seohyosang95-spec/choi-bujang-secret-vault",
   "publicAppUrl": "https://khaki-tau-choi-bujang-secret-vault.vercel.app",
   "sampleMarker": "SAMPLE_NOTE_1",
@@ -16,6 +16,6 @@
     "PUT /api/notes/:id",
     "DELETE /api/notes/:id"
   ],
-  "originalApiUrl": null,
+  "originalApiUrl": "https://zevnboqdbsrtnifytumy.supabase.co/rest/v1/notes",
   "restoreRoute": null
 }
