@@ -55,3 +55,25 @@ test('first attack check reads public data.json without credentials', async () =
     globalThis.fetch = originalFetch;
   }
 });
+
+test('third attack check requires a JSON authentication rejection', async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  try {
+    globalThis.fetch = async () => {
+      calls += 1;
+      if (calls === 1) return new Response(JSON.stringify({ notes: [] }), {
+        status: 200, headers: { 'content-type': 'application/json' },
+      });
+      return new Response(JSON.stringify({ error: 'AUTH_REQUIRED' }), {
+        status: 401, headers: { 'content-type': 'application/json' },
+      });
+    };
+    const results = await runAttackChecks({ ...config, step: 3 });
+    assert.equal(results.length, 2);
+    assert.match(results[0].observed, /가상 메모가 없음/u);
+    assert.match(results[1].observed, /JSON 오류로 거부됨 \(HTTP 401\)/u);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

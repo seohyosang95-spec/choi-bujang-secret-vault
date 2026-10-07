@@ -1,47 +1,52 @@
-# BYTE BACK 방어전 2단계 저장점
+# BYTE BACK 방어전 3단계 저장점
 
-이 저장소는 가상 메모 네 건을 공개 정적 파일에서 학습용 Supabase 테이블로 옮긴 2단계 상태입니다. 실제 학생 자료, 비밀번호, 토큰, 비밀키를 코드·로그·응답·Git에 넣지 마세요.
+이 저장소는 Supabase Auth 이메일·비밀번호 로그인과 인증된 가상 메모 CRUD를 붙인 3단계 상태입니다. 비밀번호와 JWT는 공식 Supabase SDK가 처리하며 코드·로그·응답·Git에 저장하지 않습니다.
 
 ## 현재 작동하는 기능
 
-- `/`의 화면은 `/api/notes` 서버 함수를 호출해 네 개의 카드를 표시합니다.
-- 서버 함수만 `SUPABASE_URL`과 서버 전용 `SUPABASE_SECRET_KEY`를 읽습니다.
-- `/data.json`은 `{"notes":[]}`만 반환하며 빌드할 때도 빈 상태로 다시 생성됩니다.
-- 첫 화면을 포함한 모든 경로에는 `X-Content-Type-Options: nosniff` 헤더가 붙습니다.
-- `/api/notes`는 아직 로그인 없이 호출할 수 있는 공개 주소입니다. 서버 전용 키가 응답에 노출되지는 않지만, 함수가 그 권한으로 자료를 대신 읽어 주므로 현재 단계의 남은 약점입니다.
+- `/`은 로그아웃 상태에서 이메일·비밀번호 로그인 화면을 표시합니다.
+- 공식 `@supabase/supabase-js` 흐름의 `signInWithPassword`, `getSession`, `onAuthStateChange`, `signOut`을 사용합니다.
+- 로그인 실패 이유는 로그인 화면에 표시하며, 로그인 뒤에는 로그아웃·메모 추가·수정·삭제 화면으로 바뀝니다.
+- 브라우저는 SDK가 발급한 access token만 `Authorization: Bearer …` 헤더로 `/api/notes`에 보냅니다.
+- 서버는 수정하지 않은 `src/verify-login.mjs`로 토큰을 검사하고, 검증된 `userId`만 새 메모의 `owner_id`로 저장합니다. 브라우저 본문의 `userId`나 `role`은 읽지 않습니다.
+- 비로그인 또는 검증 실패 요청은 자료 없이 `401 {"error":"AUTH_REQUIRED"}`로 거부합니다.
+- `/data.json`은 계속 메모 0건이며 `/aleph.json` 생성과 `X-Content-Type-Options: nosniff` 설정도 유지합니다.
 
-## Supabase와 Vercel 설정
+## 공개 Supabase 설정
 
-로컬에서만 보관되는 `supabase/step2-notes.sql`을 Supabase 대시보드의 **SQL Editor → New query**에 붙여 넣고 **Run**을 누릅니다. 이 SQL은 `owner_id uuid`를 만들지만 `auth.users` 외래키는 만들지 않고, RLS를 켜며 `anon`·`authenticated`의 권한을 철회합니다. 파일 끝의 확인 결과에서 `owner_id | uuid`, `rls_enabled | true`, 권한 조회 0행을 확인합니다.
+`public/auth-config.js`에는 브라우저에서 써도 되는 Supabase Project URL과 publishable key가 설정되어 있습니다. `aleph.config.json`에는 같은 프로젝트의 `/auth/v1` 발급자, `authenticated` 대상, 공개 JWKS 주소가 기록되어 있습니다.
 
-Vercel 프로젝트의 **Settings → Environment Variables**에 다음 이름만 등록합니다. 값은 Vercel의 비밀 입력란에 직접 넣고 저장소나 화면 캡처에 포함하지 않습니다.
+Vercel의 `SUPABASE_URL`과 서버 전용 `SUPABASE_SECRET_KEY`는 서버 환경변수에만 둡니다. 서버 전용 키는 브라우저 파일·응답·로그에 넣지 않습니다.
 
-- `SUPABASE_URL`: 학습용 Supabase 프로젝트 URL
-- `SUPABASE_SECRET_KEY`: 서버 함수에서만 쓰는 서버 전용 키
+`supabase/step3-auth-crud.sql`을 Supabase **SQL Editor → New query → Run**에서 한 번 실행합니다. 기존 숫자 ID를 UUID로 바꾸고 UUID 기본값, `owner_id uuid`, RLS, `anon`·`authenticated` 권한 회수를 유지합니다.
 
-그다음 최신 커밋을 배포합니다. 로컬 정적 결과만 다시 만들려면 `npm run build -- --local`을 실행합니다. 로컬 실행은 Vercel 배포나 심판 판정을 증명하지 않습니다.
+## 자료 API 계약
 
-## 정적 파일과 최신 저장소 검색 절차
+모든 경로는 정상 토큰이 필요합니다.
 
-1. 첫 화면에서 카드 본문 한 문장을 복사하되 README나 코드에 붙여 넣지는 않습니다.
-2. 로컬에서 `git grep -nF -- "<복사한 카드 문장>"`을 실행합니다. 추적 파일 검색 결과가 없어야 합니다.
-3. `npm run build -- --local` 뒤 `rg -nF "<복사한 카드 문장>" public`을 실행합니다. 새 정적 파일 검색 결과가 없어야 합니다.
-4. GitHub의 최신 커밋에서 **Code** 검색을 열고 같은 문장을 따옴표로 검색합니다. 결과가 없어야 합니다.
-5. 최신 배포의 `/data.json`을 직접 열어 404 또는 `notes` 0건인지 확인하고, `/aleph.json`이 열리는지 확인합니다.
-6. 첫 화면의 개발자 도구 **Network**에서 문서 응답의 `X-Content-Type-Options: nosniff`를 확인합니다.
+- `GET /api/notes`: 메모 배열
+- `POST /api/notes`: `{id?, title, body}`를 받고 `{id}` 반환. ID가 없으면 서버가 UUID 생성
+- `GET /api/notes/:id`: `{id, title, body}` 또는 404
+- `PUT /api/notes/:id`: `{title, body}`로 수정
+- `DELETE /api/notes/:id`: 삭제 후 같은 ID의 GET은 404
 
-2026-10-07 로컬 확인에서는 Git 추적 파일과 새 `public` 산출물의 카드 본문 검색 결과가 각각 0건이었습니다. GitHub 원격과 Vercel 배포 결과는 새 커밋을 푸시하고 재배포한 뒤 위 절차로 별도 기록해야 합니다.
+3단계에서는 로그인 여부만 검사합니다. 단건 GET·PUT·DELETE에 `owner_id` 조건이 아직 없어 B가 A의 메모에 접근할 수 있는 허점은 4단계에서 확인하고 막습니다.
 
-## 남은 약점과 과거 노출 한계
+## 다시 실행하고 직접 확인하기
 
-`/api/notes`는 현재 공개 함수이므로 주소를 아는 누구나 비로그인 요청을 보낼 수 있습니다. 공개 키 요청과 실제 응답 여부는 심판이 확인하며, 다음 단계에서 로그인과 사용자별 권한 검사를 추가해야 합니다.
+로컬 정적 결과와 자동 시험은 `npm run build -- --local && npm run test:package && npm run test:r5`로 실행합니다. 로컬 시험은 실제 Supabase 로그인이나 Vercel 배포 성공을 증명하지 않습니다.
 
-첫 커밋과 이전 Vercel 배포에는 공개 가상 메모가 있었습니다. 옛 공개 커밋을 열 수 있거나 옛 배포가 계속 접근 가능한 동안에는 과거 노출이 해소됐다고 쓰지 않습니다. 새 정적 파일과 최신 커밋에서 문장이 사라진 것은 앞으로의 노출 경로를 줄인 결과일 뿐, 이미 공개된 이력을 지우지는 않습니다.
+배포 후 화면에서 다음 순서로 확인합니다.
 
-## 직접 확인할 것
+1. 시크릿 창에서 `/api/notes`를 열어 401 JSON 오류가 오고 메모가 보이지 않는지 확인합니다.
+2. A 계정으로 로그인해 화면이 메모 목록·편집 화면으로 바뀌는지 확인합니다.
+3. 메모를 추가하고 수정한 뒤 삭제하며, 삭제한 ID의 GET이 404인지 확인합니다.
+4. 로그아웃해 로그인 화면으로 돌아오고 자료 화면이 사라지는지 확인합니다.
+5. `/aleph.json`이 열리고 첫 문서 응답에 `X-Content-Type-Options: nosniff`가 있는지 확인합니다.
+6. 브라우저 Sources와 Network 응답·로그에 `SUPABASE_SECRET_KEY` 값이 없는지 확인합니다.
 
-- 새 정적 파일과 최신 저장소에서 카드 본문 검색 결과가 0건인가?
-- 환경변수가 설정된 최신 배포에서 첫 화면에 네 카드가 보이는가?
-- `/data.json`은 404 또는 메모 0건이고 `/aleph.json`은 열리는가?
-- 첫 화면 응답에 `X-Content-Type-Options: nosniff`가 있는가?
-- 공개 `/api/notes`와 옛 공개 이력의 한계를 기록했는가?
+정상 결과는 A 로그인 뒤 CRUD가 되고 로그아웃 뒤 로그인 화면으로 돌아오는 것입니다. 거부되어야 할 결과는 토큰이 없거나 검증에 실패한 자료 요청이며, HTML이나 빈 화면이 아니라 401 JSON 오류가 와야 합니다.
+
+## 과거 노출과 현재 한계
+
+첫 커밋과 옛 배포에 공개 가상 메모가 남아 있는 한 과거 노출이 해소됐다고 쓰지 않습니다. 3단계는 새 요청에 로그인 검사를 추가하지만, B가 A의 메모 ID를 알면 읽고 수정하거나 삭제할 수 있는 소유자 검증 결함을 의도적으로 남깁니다. 이 결함은 4단계 범위입니다.

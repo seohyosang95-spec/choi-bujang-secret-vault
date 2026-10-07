@@ -1,5 +1,5 @@
 {
-"$schema": "<https://openapi.vercel.sh/vercel.json>",
+"$schema": "https://openapi.vercel.sh/vercel.json",
 "framework": null,
 "buildCommand": "npm run build",
 "outputDirectory": "public",
@@ -9,12 +9,6 @@
 "headers": [
   {
     "source": "/(.*)",
-    "headers": [
-      { "key": "X-Content-Type-Options", "value": "nosniff" }
-    ]
-  },
-  {
-    "source": "/",
     "headers": [
       { "key": "X-Content-Type-Options", "value": "nosniff" }
     ]
