@@ -113,6 +113,7 @@ export function createNotesHandler({
       const { data, error } = await active.supabase
         .from('notes')
         .select('id, title, content')
+        .eq('owner_id', login.userId)
         .order('created_at', { ascending: true });
       if (error || !Array.isArray(data)) return json(response, 502, { error: 'NOTES_UNAVAILABLE' });
       return json(response, 200, data.map(publicNote));
@@ -121,11 +122,14 @@ export function createNotesHandler({
     if (request.method === 'GET') {
       const { data, error } = await active.supabase
         .from('notes')
-        .select('id, title, content')
+        .select('id, title, content, owner_id')
         .eq('id', id)
         .maybeSingle();
       if (error) return json(response, 502, { error: 'NOTES_UNAVAILABLE' });
       if (!data) return json(response, 404, { error: 'NOTE_NOT_FOUND' });
+      if (data.owner_id && data.owner_id !== login.userId) {
+        return json(response, 403, { error: 'FORBIDDEN' });
+      }
       return json(response, 200, publicNote(data));
     }
 
@@ -146,9 +150,21 @@ export function createNotesHandler({
     if (request.method === 'PUT' && id !== null) {
       const input = noteInput(requestBody(request));
       if (!input) return json(response, 400, { error: 'INVALID_NOTE' });
+
+      const { data: existing, error: existingError } = await active.supabase
+        .from('notes')
+        .select('id, owner_id')
+        .eq('id', id)
+        .maybeSingle();
+      if (existingError) return json(response, 502, { error: 'NOTES_UNAVAILABLE' });
+      if (!existing) return json(response, 404, { error: 'NOTE_NOT_FOUND' });
+      if (existing.owner_id && existing.owner_id !== login.userId) {
+        return json(response, 403, { error: 'FORBIDDEN' });
+      }
+
       const { data, error } = await active.supabase
         .from('notes')
-        .update({ title: input.title, content: input.content })
+        .update({ title: input.title, content: input.content, owner_id: login.userId })
         .eq('id', id)
         .select('id, title, content')
         .maybeSingle();
@@ -159,6 +175,17 @@ export function createNotesHandler({
     }
 
     if (request.method === 'DELETE' && id !== null) {
+      const { data: existing, error: existingError } = await active.supabase
+        .from('notes')
+        .select('id, owner_id')
+        .eq('id', id)
+        .maybeSingle();
+      if (existingError) return json(response, 502, { error: 'NOTES_UNAVAILABLE' });
+      if (!existing) return json(response, 404, { error: 'NOTE_NOT_FOUND' });
+      if (existing.owner_id && existing.owner_id !== login.userId) {
+        return json(response, 403, { error: 'FORBIDDEN' });
+      }
+
       const { data, error } = await active.supabase
         .from('notes')
         .delete()

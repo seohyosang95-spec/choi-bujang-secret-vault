@@ -124,7 +124,9 @@ test('자료 함수는 검증된 사용자만 허용하고 생성 owner_id에 �
   const supabase = scriptedSupabase([
     { data: [], error: null },
     { data: { id: noteId }, error: null },
+    { data: { id: noteId, owner_id: userId }, error: null },
     { data: { id: noteId, title: '수정', content: '수정 본문' }, error: null },
+    { data: { id: noteId, owner_id: userId }, error: null },
     { data: { id: noteId }, error: null },
     { data: null, error: null },
   ], operations);
@@ -171,7 +173,7 @@ test('자료 함수는 검증된 사용자만 허용하고 생성 owner_id에 �
   await handler({ method: 'PUT', headers, query: { id: noteId }, body: { title: '수정', body: '수정 본문' } }, updated);
   assert.equal(updated.statusCode, 200);
   assert.deepEqual(updated.body, { id: noteId, title: '수정', body: '수정 본문' });
-  assert.deepEqual(operations[2].eq, ['id', noteId]);
+  assert.deepEqual(operations[3].eq, ['id', noteId]);
 
   const removed = responseRecorder();
   await handler({ method: 'DELETE', headers, query: { id: noteId } }, removed);
@@ -182,4 +184,53 @@ test('자료 함수는 검증된 사용자만 허용하고 생성 owner_id에 �
   await handler({ method: 'GET', headers, query: { id: noteId } }, missing);
   assert.equal(missing.statusCode, 404);
   assert.deepEqual(missing.body, { error: 'NOTE_NOT_FOUND' });
+});
+
+test('자료 함수는 타인의 메모 조회·수정·삭제 요청을 403으로 거부한다', async () => {
+  const userA = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const userB = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const noteId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const operations = [];
+  const supabase = scriptedSupabase([
+    { data: { id: noteId, title: 'B의 메모', content: '내용', owner_id: userB }, error: null }, // GET 타인 메모
+    { data: { id: noteId, owner_id: userB }, error: null }, // PUT 타인 메모
+    { data: { id: noteId, owner_id: userB }, error: null }, // DELETE 타인 메모
+  ], operations);
+
+  const handler = createNotesHandler({
+    appConfig: {
+      publicAppUrl: 'https://student-defense.vercel.app',
+      judgeIssuer: 'https://judge.example.org/defense/judge',
+      identityProvider: {
+        issuer: 'https://student.supabase.co/auth/v1',
+        audience: 'authenticated',
+        jwksUrl: 'https://student.supabase.co/auth/v1/.well-known/jwks.json',
+      },
+    },
+    env: { SUPABASE_URL: 'https://student.supabase.co/', SUPABASE_SECRET_KEY: 'test-only' },
+    createSupabaseClient: () => supabase,
+    createVerifier: () => async authorization => authorization === 'Bearer user-a.token'
+      ? { kind: 'student', userId: userA } : null,
+    generateId: () => noteId,
+  });
+
+  const headers = { authorization: 'Bearer user-a.token' };
+
+  // 1. 타인 메모 단건 조회 거부 (403)
+  const readOther = responseRecorder();
+  await handler({ method: 'GET', headers, query: { id: noteId } }, readOther);
+  assert.equal(readOther.statusCode, 403);
+  assert.deepEqual(readOther.body, { error: 'FORBIDDEN' });
+
+  // 2. 타인 메모 수정 거부 (403)
+  const updateOther = responseRecorder();
+  await handler({ method: 'PUT', headers, query: { id: noteId }, body: { title: '변조', body: '변조 내용' } }, updateOther);
+  assert.equal(updateOther.statusCode, 403);
+  assert.deepEqual(updateOther.body, { error: 'FORBIDDEN' });
+
+  // 3. 타인 메모 삭제 거부 (403)
+  const deleteOther = responseRecorder();
+  await handler({ method: 'DELETE', headers, query: { id: noteId } }, deleteOther);
+  assert.equal(deleteOther.statusCode, 403);
+  assert.deepEqual(deleteOther.body, { error: 'FORBIDDEN' });
 });

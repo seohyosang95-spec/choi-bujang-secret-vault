@@ -6,8 +6,8 @@ const root = resolve(import.meta.dirname, '..');
 const source = resolve(root, 'data.json');
 const output = resolve(root, 'public', 'data.json');
 const config = JSON.parse(await readFile(resolve(root, 'aleph.config.json'), 'utf8'));
-if (![1, 2, 3].includes(config.step)) {
-  throw new Error('1단계부터 3단계 설정을 확인하세요.');
+if (![1, 2, 3, 4].includes(config.step)) {
+  throw new Error('1단계부터 4단계 설정을 확인하세요.');
 }
 await mkdir(resolve(root, 'public'), { recursive: true });
 if (config.step === 1) {
