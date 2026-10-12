@@ -1,0 +1,27 @@
+[
+  {
+    "name": "요청 인자 내 SQL 구문 삽입 반복",
+    "condition": "동일한 출발 IP에서 URL 파라미터나 요청 인자에 SQL 조작 구문(따옴표 결합, SELECT, UNION 등) 또는 데이터베이스 질의 연결 표기가 10회 이상 반복되는 경우",
+    "basis": "MITRE ATT&CK T1190(Exploit Public-Facing Application) - 웹 입력값 검증 미흡을 악용해 조작된 SQL 질의를 주입하고 데이터베이스 정보를 무단 탈취·조작하려는 형태입니다."
+  },
+  {
+    "name": "요청 인자 내 스크립트 태그 삽입 반복",
+    "condition": "동일한 출발 IP에서 검색어나 요청 인자에 <script> 태그, 스크립트 삽입 표식 등이 8회 이상 반복되어 전달되는 경우",
+    "basis": "MITRE ATT&CK T1190(Exploit Public-Facing Application) - 웹 애플리케이션의 출력 필터링 취약점을 악용해 클라이언트 측에서 실행될 악성 자바스크립트 코드를 주입하려는 형태입니다."
+  },
+  {
+    "name": "경로 거슬러 올라가기(../) 및 경로 이탈 반복",
+    "condition": "동일한 출발 IP에서 파일 경로나 요청 파라미터에 상위 디렉터리 이동 표기(../) 또는 경로 이탈 구문이 8회 이상 반복되는 경우",
+    "basis": "MITRE ATT&CK T1190(Exploit Public-Facing Application) - 웹 서버의 경로 제약 검증을 우회하여 공개 디렉터리 외부의 시스템 파일 및 중요 자원에 무단 접근하려는 형태입니다."
+  },
+  {
+    "name": "스크립트 및 SQL 표식 혼합 교차 주입",
+    "condition": "동일한 출발 IP에서 스크립트 삽입 표식과 SQL 구문 표기가 번갈아 반복되며 10회 이상의 연속 요청이 발생하는 경우",
+    "basis": "MITRE ATT&CK T1190(Exploit Public-Facing Application) - 취약점 스캐너 또는 공격 스크립트를 통해 다수의 웹 주입 취약점 벡터를 동시에 탐색하고 악용하려는 형태입니다."
+  },
+  {
+    "name": "요청 인자 내 시스템 명령 구분자 반복 주입",
+    "condition": "동일한 출발 IP에서 요청 파라미터에 셸 명령 구분자(; , | , && 등) 표기가 10회 이상 연속 포함되어 전달되는 경우",
+    "basis": "MITRE ATT&CK T1190(Exploit Public-Facing Application) - 백엔드 명령 실행 인터페이스에 셸 메타문자를 주입하여 시스템 권한으로 임의 명령을 실행하려는 형태입니다."
+  }
+]
