@@ -27,5 +27,6 @@ export function deploymentIdentity(env, config) {
     judgeIssuer: config.judgeIssuer,
     sampleMarker: config.sampleMarker,
     ...(Array.isArray(config.allowedRoutes) ? { allowedRoutes: config.allowedRoutes } : {}),
+    ...(typeof config.originalApiUrl === 'string' ? { originalApiUrl: config.originalApiUrl } : {}),
   };
 }

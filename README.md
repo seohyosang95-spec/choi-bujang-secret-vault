@@ -5,7 +5,7 @@
 ## 현재 작동하는 기능
 
 - `/`은 로그아웃 상태에서 이메일·비밀번호 로그인 화면을 표시합니다.
-- 공식 `@supabase/supabase-js` 흐름의 `signInWithPassword`, `getSession`, `onAuthStateChange`, `signOut`을 사용합니다.
+- 브라우저에 Supabase 공개 키(`sb_publishable_…` / `anon`)가 전혀 없으며, 서버 함수(`/api/auth`)를 통해 로그인을 안전하게 중계합니다.
 - 브라우저 코드는 메모 테이블을 직접 호출하지 않고, 오직 서버 함수(`/api/notes`)만 호출합니다.
 - 서버 함수(`api/notes.js`)는 `SUPABASE_SECRET_KEY`를 사용하여 로그인·소유자 검증(IDOR 방어)을 수행한 후 DB에 접근합니다:
   - `GET /api/notes`: 로그인한 사용자의 메모 목록만 반환
