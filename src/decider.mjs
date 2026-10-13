@@ -72,11 +72,6 @@ const FUNCTION_KEYWORDS = new Set([
   'action', 'search', 'filter', 'execute', 'run', 'preview', 'dump', 'all', 'list',
 ]);
 
-function isInstructor(subjectId) {
-  const sub = String(subjectId || '').toLowerCase();
-  return sub.includes('instructor') || sub.includes('teacher') || sub.includes('admin') || sub.includes('staff') || sub.includes('master');
-}
-
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function isUserA(id) {
@@ -210,14 +205,14 @@ export function validateZoneAccess(request) {
   if (isAnnouncementRequest(request, path, parts)) {
     // 일반 학생의 공지 수정(PUT, POST, DELETE, PATCH)은 거부
     if (['PUT', 'POST', 'DELETE', 'PATCH'].includes(method)) {
-      if (!isInstructor(subjectId)) {
-        return {
-          allowed: false,
-          reasonCode: 'forbidden_resource',
-          ruleId: 'zone_isolation',
-        };
-      }
-      return { allowed: true, reasonCode: 'approved', ruleId: 'zone_isolation' };
+      // The request contract has no verified instructor role, so the decider
+      // must deny announcement writes for every subject. The API performs any
+      // separately authenticated instructor workflow.
+      return {
+        allowed: false,
+        reasonCode: 'forbidden_resource',
+        ruleId: 'zone_isolation',
+      };
     }
     // 공지 읽기(GET)는 모든 주체에 허용
     if (method === 'GET') {
@@ -239,7 +234,7 @@ export function validateZoneAccess(request) {
 
     // /notes (목록 조회 또는 생성)
     if (parts.length === 1) {
-      if (['GET', 'POST'].includes(method)) {
+      if (method === 'POST') {
         return { allowed: true, reasonCode: 'approved', ruleId: 'zone_isolation' };
       }
       return { allowed: false, reasonCode: 'unknown_route', ruleId: 'zone_isolation' };
