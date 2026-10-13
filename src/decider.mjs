@@ -191,16 +191,6 @@ export function validateZoneAccess(request) {
   }
 
   const rawPath = request.path.trim();
-  // The memo list is allowed only through its self-scoped endpoint.
-  if (rawPath === '/api/my/notes') {
-    if (request.service === 'notes'
-        && request.method.toUpperCase() === 'GET'
-        && request.route === 'GET /api/my/notes'
-        && request.queryLength === 0) {
-      return { allowed: true, reasonCode: 'approved', ruleId: 'zone_isolation' };
-    }
-    return { allowed: false, reasonCode: 'unknown_route', ruleId: 'zone_isolation' };
-  }
   if (request.queryLength !== 0) {
     return { allowed: false, reasonCode: 'unknown_route', ruleId: 'zone_isolation' };
   }
