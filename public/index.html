@@ -106,9 +106,9 @@
       cancelEdit.hidden = true;
     };
 
-    const api = async (path = '', options = {}, resourceId = 'notes') => {
+    const api = async (path = '', options = {}, resourceId = 'notes', basePath = '/api/notes') => {
       if (!session?.access_token) throw new Error('로그인이 필요합니다.');
-      const response = await fetch(`/api/notes${path}`, {
+      const response = await fetch(`${basePath}${path}`, {
         ...options,
         cache: 'no-store',
         headers: {
@@ -130,7 +130,7 @@
       noteError.textContent = '';
       notesList.replaceChildren();
       try {
-        const notes = await api();
+        const notes = await api('', {}, 'notes', '/api/my/notes');
         if (!Array.isArray(notes)) throw new Error('자료 형식이 맞지 않습니다.');
         if (!notes.length) {
           const empty = document.createElement('li');
