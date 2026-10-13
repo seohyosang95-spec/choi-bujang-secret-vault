@@ -234,7 +234,7 @@ export function validateZoneAccess(request) {
 
     // /notes (목록 조회 또는 생성)
     if (parts.length === 1) {
-      if (method === 'POST') {
+      if (['GET', 'POST'].includes(method)) {
         return { allowed: true, reasonCode: 'approved', ruleId: 'zone_isolation' };
       }
       return { allowed: false, reasonCode: 'unknown_route', ruleId: 'zone_isolation' };
