@@ -1,6 +1,6 @@
-# BYTE BACK 방어전 8단계 저장점
+# BYTE BACK 방어전 9단계 저장점
 
-이 저장소는 자료마다 갈 수 있는 구역을 분리(마이크로세그멘테이션)하여, 내 자료실 메모와 강사 공지 자원을 구분하고 자기 메모 읽기·수정 허용, 타인 메모 접근 및 일반 학생의 공지 수정 차단, 기능 경로 및 우회 직접 요청 거부를 적용한 8단계 상태입니다.
+이 저장소는 자료마다 갈 수 있는 구역을 분리(마이크로세그멘테이션)하고, 같은 확인된 가상 기기의 10분 내 GET 다량 조회만 별도 회수 대상으로 제안하는 9단계 상태입니다.
 
 ## 현재 작동하는 기능
 
@@ -24,7 +24,8 @@
     - 일반 학생의 강사 공지 읽기: `decision: 'allow'`, `reasonCode: 'approved'`
     - `:id` 깊이의 기능 경로(`/notes/export` 등): `decision: 'deny'`, `reasonCode: 'unknown_route'`
     - 알 수 없는 경로 및 쿼리 우회 경로: `decision: 'deny'`, `reasonCode: 'unknown_route'`
-- `aleph.config.json`에 원본 자료 API의 HTTPS 주소(`originalApiUrl`) 및 step 8이 등록되어 있습니다.
+- `aleph.config.json`에 원본 자료 API의 HTTPS 주소(`originalApiUrl`) 및 step 9가 등록되어 있습니다.
+- 탐지기(`src/detect.mjs`)는 같은 확인된 `identity.sub`의 GET 사건이 10분 안에 120건을 초과할 때만 한 대상에 대해 `propose_revocation`과 `burst_read`를 제안합니다. 정상 사건은 `observe`로 남기며 실제 회수나 기기 권한 변경은 수행하지 않습니다.
 - `/data.json`은 빈 목록(`{"notes": []}`)을 유지하며 빌드 시 `/aleph.json`이 자동 생성됩니다.
 
 ## 판정기 및 가상 사건 확인 순서
@@ -52,12 +53,21 @@
    - 학생 공지 읽기: `allow`
    - 기능 경로(`/notes/export`): `deny` (`unknown_route`)
 
+4. 9단계 탐지 비교 시험:
+   ```bash
+   npm run detect:test
+   ```
+   - 정상 조회 30건·120건: `observe`
+   - 같은 기기의 121건 이상 조회: `propose_revocation`, `burst_read`, 대상 1개
+   - 다른 사용자 합산·10분 밖 조회: `observe`
+
 ## 다시 실행하고 직접 확인하기
 
 로컬 시험 실행:
 ```bash
 npm run fixture:7
 npm run decider:test
+npm run detect:test
 npm run test:r5
 npm run test:package
 npm run build -- --local
