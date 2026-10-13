@@ -21,9 +21,37 @@ function authorizationHeader(request) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+const INVALID_ROUTE_ID = Symbol('invalid-route-id');
+
 function routeId(request) {
   const value = request.query?.id;
-  return Array.isArray(value) ? null : value ?? null;
+  if (Array.isArray(value)) return INVALID_ROUTE_ID;
+  if (value !== undefined && value !== null) return String(value);
+
+  // Vercel rewrites normally expose :id through req.query, but a direct
+  // function invocation can retain the original path. Parse that fallback so
+  // a single-note request never degrades into an unscoped list request.
+  const rawUrl = request.url ?? request.originalUrl ?? request.path;
+  if (typeof rawUrl !== 'string' || !rawUrl.trim()) return null;
+
+  let parsed;
+  try {
+    parsed = new URL(rawUrl, 'https://internal.invalid');
+  } catch {
+    return INVALID_ROUTE_ID;
+  }
+
+  const queryIds = parsed.searchParams.getAll('id');
+  if (queryIds.length > 1) return INVALID_ROUTE_ID;
+  if (queryIds.length === 1) return queryIds[0];
+
+  const match = parsed.pathname.match(/^\/api\/notes\/([^/]+)\/?$/iu);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return INVALID_ROUTE_ID;
+  }
 }
 
 function requestBody(request) {
@@ -138,6 +166,7 @@ export function createNotesHandler({
     }
 
     const id = routeId(request);
+    if (id === INVALID_ROUTE_ID) return json(response, 400, { error: 'INVALID_NOTE_ID' });
     if (id !== null && !UUID.test(id)) return json(response, 400, { error: 'INVALID_NOTE_ID' });
 
     if (request.method === 'GET' && id === null) {
