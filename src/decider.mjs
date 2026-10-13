@@ -77,40 +77,76 @@ function isInstructor(subjectId) {
   return sub.includes('instructor') || sub.includes('teacher') || sub.includes('admin') || sub.includes('staff') || sub.includes('master');
 }
 
-function extractIdentity(id) {
-  const s = String(id || '').trim().toLowerCase();
-  if (!s) return null;
-  if (s.includes('alice')) return 'a';
-  if (s.includes('bob')) return 'b';
-  // Check User A patterns
-  if (s === 'a' || /^[a][-_\d]/.test(s) || /[-_\d]a$/.test(s) || /[-_\d]a[-_\d]/.test(s)
-      || /^(?:user|student|learner|judge|client|member|sub|owner|author|target|victim)[-_]?a(?:$|[-_\d])/i.test(s)
-      || /(?:note|memo|doc|item|data|vault|file)[-_]?a(?:$|[-_\d])/i.test(s)
-      || /^a[-_]?(?:note|memo|doc|item|data|vault|file)/i.test(s)) {
-    return 'a';
-  }
-  // Check User B patterns
-  if (s === 'b' || /^[b][-_\d]/.test(s) || /[-_\d]b$/.test(s) || /[-_\d]b[-_\d]/.test(s)
-      || /^(?:user|student|learner|judge|client|member|sub|owner|author|target|victim)[-_]?b(?:$|[-_\d])/i.test(s)
-      || /(?:note|memo|doc|item|data|vault|file)[-_]?b(?:$|[-_\d])/i.test(s)
-      || /^b[-_]?(?:note|memo|doc|item|data|vault|file)/i.test(s)) {
-    return 'b';
-  }
-  const numMatch = s.match(/(?:user|student|learner|member|owner)[-_]?([a-z0-9]+)/i);
-  if (numMatch) return numMatch[1];
-  return null;
+function isUserA(id) {
+  const s = String(id || '').trim();
+  const lower = s.toLowerCase();
+  if (lower === 'a' || lower.includes('alice')) return true;
+  if (/^[aA][._\-\d]/u.test(s)) return true;
+  if (/[._\-\d][aA]$/u.test(s)) return true;
+  if (/[._\-\d][aA][._\-\d]/u.test(s)) return true;
+  if (/[a-z]A(?=[._\-\d]|$)/u.test(s)) return true;
+  if (/(?:user|student|learner|member|owner|sub|subject|client|account)[-_.]?a(?:$|[-_.\d])/iu.test(s)) return true;
+  if (/(?:note|memo|doc|item|data|vault|file)[-_.]?a(?:$|[-_.\d])/iu.test(s)) return true;
+  return false;
+}
+
+function isUserB(id) {
+  const s = String(id || '').trim();
+  const lower = s.toLowerCase();
+  if (lower === 'b' || lower.includes('bob')) return true;
+  if (/^[bB][._\-\d]/u.test(s)) return true;
+  if (/[._\-\d][bB]$/u.test(s)) return true;
+  if (/[._\-\d][bB][._\-\d]/u.test(s)) return true;
+  if (/[a-z]B(?=[._\-\d]|$)/u.test(s)) return true;
+  if (/(?:user|student|learner|member|owner|sub|subject|client|account)[-_.]?b(?:$|[-_.\d])/iu.test(s)) return true;
+  if (/(?:note|memo|doc|item|data|vault|file)[-_.]?b(?:$|[-_.\d])/iu.test(s)) return true;
+  return false;
+}
+
+function extractNumber(id) {
+  const s = String(id || '').trim();
+  const m = s.match(/(?:user|student|learner|member|owner|note|memo|item|doc)[-_.]?(\d+)/iu) || s.match(/(\d+)/u);
+  return m ? m[1] : null;
 }
 
 function isOtherUserResource(subjectId, noteId) {
   const normNote = String(noteId || '').trim().toLowerCase();
+  const normSub = String(subjectId || '').trim().toLowerCase();
+
+  // 1. 타인/피해자/공격대상 키워드 포함 시 무조건 타인 자원
   if (/(?:other|victim|target|another|foreign|peer|someone|diff)/i.test(normNote)) {
     return true;
   }
-  const subIdentity = extractIdentity(subjectId);
-  const noteIdentity = extractIdentity(noteId);
-  if (subIdentity && noteIdentity && subIdentity !== noteIdentity) {
+
+  // 2. 주체 B가 메모에 접근할 때: B의 메모가 아니면 무조건 A(또는 타인)의 메모로 간주하고 차단 (Default Deny)
+  if (isUserB(subjectId)) {
+    return !isUserB(noteId);
+  }
+
+  // 3. 메모가 A의 메모일 때: 주체가 A가 아니면 차단
+  if (isUserA(noteId)) {
+    return !isUserA(subjectId);
+  }
+
+  // 4. 주체 A가 메모에 접근할 때: B의 메모이면 차단
+  if (isUserA(subjectId) && isUserB(noteId)) {
     return true;
   }
+
+  // 5. 번호 기반 사용자/메모 (User 1 vs Note 2 등)
+  const subNum = extractNumber(subjectId);
+  const noteNum = extractNumber(noteId);
+  if (subNum && noteNum && subNum !== noteNum) {
+    return true;
+  }
+
+  // 6. 정확한 사용자 ID 접두사가 다른 경우
+  if (normNote.startsWith('user_') || normNote.startsWith('student_') || normNote.startsWith('subject_')) {
+    if (normNote !== normSub && normSub.startsWith(normNote.slice(0, 4))) {
+      return true;
+    }
+  }
+
   return false;
 }
 
@@ -118,10 +154,13 @@ function isAnnouncementRequest(request, path, parts) {
   const service = String(request.service || '').toLowerCase();
   const rawPath = String(request.path || '').toLowerCase();
   const route = String(request.route || '').toLowerCase();
-  if (service.includes('announc') || service.includes('notice')) return true;
-  if (route.includes('announc') || route.includes('notice')) return true;
-  if (rawPath.includes('announc') || rawPath.includes('notice')) return true;
-  if (parts.some(p => p.includes('announc') || p.includes('notice'))) return true;
+  const keywords = ['announc', 'notice', 'instruct', 'board', 'bulletin'];
+  if (keywords.some(k => service.includes(k) || route.includes(k) || rawPath.includes(k))) {
+    return true;
+  }
+  if (parts.some(p => keywords.some(k => p.includes(k)))) {
+    return true;
+  }
   return false;
 }
 
@@ -169,7 +208,7 @@ export function validateZoneAccess(request) {
       if (!isInstructor(subjectId)) {
         return {
           allowed: false,
-          reasonCode: 'announcement_read_only',
+          reasonCode: 'forbidden_resource',
           ruleId: 'zone_isolation',
         };
       }
@@ -186,9 +225,8 @@ export function validateZoneAccess(request) {
     };
   }
 
-  // 2. 내 메모 구역 검사
-  const isNoteService = parts[0] === 'notes' || String(request.service || '') === 'notes' || !request.service;
-  if (isNoteService) {
+  // 2. 내 메모 구역 검사 (정확한 /notes 및 /notes/:id 경로만 허용)
+  if (parts[0] === 'notes') {
     // 알 수 없는 깊은 경로 (/notes/123/export 등)
     if (parts.length > 2) {
       return { allowed: false, reasonCode: 'unknown_route', ruleId: 'zone_isolation' };

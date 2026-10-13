@@ -20,7 +20,7 @@
   - 8단계 구역 분리 규칙 (`zone_isolation`):
     - A의 자기 메모 읽기·수정: `decision: 'allow'`, `reasonCode: 'approved'`
     - B의 A 메모 접근 시도: `decision: 'deny'`, `reasonCode: 'forbidden_resource'`
-    - 일반 학생의 강사 공지 수정: `decision: 'deny'`, `reasonCode: 'announcement_read_only'`
+    - 일반 학생의 강사 공지 수정: `decision: 'deny'`, `reasonCode: 'forbidden_resource'`
     - 일반 학생의 강사 공지 읽기: `decision: 'allow'`, `reasonCode: 'approved'`
     - `:id` 깊이의 기능 경로(`/notes/export` 등): `decision: 'deny'`, `reasonCode: 'unknown_route'`
     - 알 수 없는 경로 및 쿼리 우회 경로: `decision: 'deny'`, `reasonCode: 'unknown_route'`
@@ -48,7 +48,7 @@
 3. 8단계 구역 분리 직접 점검:
    - A 자기 메모 읽기·수정: `allow`
    - B의 A 메모 읽기·수정: `deny` (`forbidden_resource`)
-   - 학생 공지 수정: `deny` (`announcement_read_only`)
+   - 학생 공지 수정: `deny` (`forbidden_resource`)
    - 학생 공지 읽기: `allow`
    - 기능 경로(`/notes/export`): `deny` (`unknown_route`)
 
