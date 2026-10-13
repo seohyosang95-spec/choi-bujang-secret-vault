@@ -1,7 +1,7 @@
 // The student changes this check as each stage adds an attack to the same app.
 // Never return tokens, private keys, real names, or note bodies.
 export async function runAttackChecks(config) {
-  if (![1, 2, 3, 4, 5, 6, 7, 8, 9].includes(config.step)) {
+  if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10].includes(config.step)) {
     throw new Error('이 단계의 공격 점검을 src/attack-check.mjs에 구현해 주세요.');
   }
   let app;
@@ -59,6 +59,31 @@ export async function runAttackChecks(config) {
       && typeof data?.error === 'string' && data.error.length > 0;
   } catch {
     // Only a JSON error proves the stage-three unauthenticated rejection contract.
+  }
+
+  if (config.step === 10) {
+    const restoreResponse = await fetch(new URL('/api/notes/restore', app), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+      redirect: 'error', signal: AbortSignal.timeout(10000),
+    });
+    let restoreDenied = false;
+    try {
+      const data = await restoreResponse.json();
+      restoreDenied = [400, 401, 403].includes(restoreResponse.status)
+        && typeof data?.error === 'string' && data.error.length > 0;
+    } catch {
+      // A non-JSON response does not prove the restore route is protected.
+    }
+    return [
+      { attackId: 'anonymous_note_read_static', expected: '비로그인 요청에서 정적 가상 메모를 읽을 수 없음',
+        observed: hidden ? '공개 data.json에 가상 메모가 없음' : `공개 data.json에 자료가 남아 있거나 응답을 확인할 수 없음 (HTTP ${staticResponse.status})` },
+      { attackId: 'anonymous_note_read_api', expected: '비로그인 자료 API가 JSON 오류와 함께 401 또는 403으로 거부됨',
+        observed: jsonDenied ? `비로그인 자료 API가 JSON 오류로 거부됨 (HTTP ${apiResponse.status})` : `비로그인 자료 API 거부 계약을 확인하지 못함 (HTTP ${apiResponse.status})` },
+      { attackId: 'anonymous_restore', expected: '비로그인 메모 복원 요청이 JSON 오류와 함께 거부됨',
+        observed: restoreDenied ? `비로그인 복원 요청이 JSON 오류로 거부됨 (HTTP ${restoreResponse.status})` : `비로그인 복원 요청 거부 계약을 확인하지 못함 (HTTP ${restoreResponse.status})` },
+    ];
   }
 
   if (config.step === 2) {

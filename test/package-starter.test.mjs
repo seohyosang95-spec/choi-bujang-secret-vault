@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -233,4 +234,142 @@ test('자료 함수는 타인의 메모 조회·수정·삭제 요청을 403으�
   await handler({ method: 'DELETE', headers, query: { id: noteId } }, deleteOther);
   assert.equal(deleteOther.statusCode, 403);
   assert.deepEqual(deleteOther.body, { error: 'FORBIDDEN' });
+});
+
+test('B만 비공개 사본의 ID·소유자·내용 해시를 대조해 한 건을 복원한다', async () => {
+  const userB = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const userA = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const noteId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const content = 'B의 비공개 복원 시험 메모';
+  const contentSha256 = createHash('sha256').update(content, 'utf8').digest('hex');
+  const copy = {
+    id: noteId,
+    owner_id: userB,
+    title: 'B 복원 사본',
+    content,
+    content_sha256: contentSha256,
+  };
+  const operations = [];
+  const supabase = {
+    auth: { getClaims: async () => ({ data: { claims: {} }, error: null }) },
+    from(table) {
+      const operation = { table };
+      operations.push(operation);
+      const query = {
+        select(columns) { operation.select = columns; return query; },
+        eq(column, value) { operation.eq = [column, value]; return query; },
+        maybeSingle() {
+          return Promise.resolve({
+            data: table === 'note_restore_copies' ? copy : null,
+            error: null,
+          });
+        },
+        upsert(value, options) { operation.upsert = value; operation.options = options; return query; },
+        single() { return Promise.resolve({ data: { ...operation.upsert }, error: null }); },
+      };
+      return query;
+    },
+  };
+  const appConfig = {
+    publicAppUrl: 'https://student-defense.vercel.app',
+    judgeIssuer: 'https://judge.example.org/defense/judge',
+    identityProvider: {
+      issuer: 'https://student.supabase.co/auth/v1',
+      audience: 'authenticated',
+      jwksUrl: 'https://student.supabase.co/auth/v1/.well-known/jwks.json',
+    },
+  };
+  const handler = createNotesHandler({
+    appConfig,
+    env: { SUPABASE_URL: 'https://student.supabase.co/', SUPABASE_SECRET_KEY: 'test-only' },
+    createSupabaseClient: () => supabase,
+    createVerifier: () => async authorization => {
+      if (authorization === 'Bearer b.test.token') return { kind: 'student', userId: userB };
+      if (authorization === 'Bearer a.test.token') return { kind: 'student', userId: userA };
+      return null;
+    },
+  });
+
+  const restored = responseRecorder();
+  await handler({
+    method: 'POST',
+    url: '/api/notes/restore',
+    headers: { authorization: 'Bearer b.test.token' },
+    query: {},
+    body: { id: noteId, ownerId: userB, contentSha256 },
+  }, restored);
+  assert.equal(restored.statusCode, 201);
+  assert.deepEqual(restored.body, { id: noteId, ownerId: userB, contentSha256 });
+  assert.deepEqual(operations.map(operation => operation.table), ['note_restore_copies', 'notes', 'notes']);
+  assert.deepEqual(operations[0].eq, ['id', noteId]);
+  assert.deepEqual(operations[1].eq, ['id', noteId]);
+  assert.deepEqual(operations[2].upsert, {
+    id: noteId, owner_id: userB, title: 'B 복원 사본', content,
+  });
+  assert.deepEqual(operations[2].options, { onConflict: 'id' });
+  assert.equal(operations.some(operation => operation.table === 'audit_history'), false);
+
+  operations.length = 0;
+  const denied = responseRecorder();
+  await handler({
+    method: 'POST',
+    url: '/api/notes/restore',
+    headers: { authorization: 'Bearer a.test.token' },
+    query: {},
+    body: { id: noteId, ownerId: userB, contentSha256 },
+  }, denied);
+  assert.equal(denied.statusCode, 403);
+  assert.deepEqual(denied.body, { error: 'FORBIDDEN' });
+  assert.equal(operations.length, 0);
+});
+
+test('복원 사본의 내용 해시가 다르면 쓰지 않는다', async () => {
+  const userB = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const noteId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const operations = [];
+  const supabase = {
+    auth: { getClaims: async () => ({ data: { claims: {} }, error: null }) },
+    from(table) {
+      operations.push(table);
+      const query = {
+        select() { return query; },
+        eq() { return query; },
+        maybeSingle() {
+          return Promise.resolve({ data: {
+            id: noteId,
+            owner_id: userB,
+            title: 'B 복원 사본',
+            content: '원본 내용',
+            content_sha256: '0'.repeat(64),
+          }, error: null });
+        },
+      };
+      return query;
+    },
+  };
+  const handler = createNotesHandler({
+    appConfig: {
+      publicAppUrl: 'https://student-defense.vercel.app',
+      judgeIssuer: 'https://judge.example.org/defense/judge',
+      identityProvider: {
+        issuer: 'https://student.supabase.co/auth/v1',
+        audience: 'authenticated',
+        jwksUrl: 'https://student.supabase.co/auth/v1/.well-known/jwks.json',
+      },
+    },
+    env: { SUPABASE_URL: 'https://student.supabase.co/', SUPABASE_SECRET_KEY: 'test-only' },
+    createSupabaseClient: () => supabase,
+    createVerifier: () => async () => ({ kind: 'student', userId: userB }),
+  });
+  const response = responseRecorder();
+  await handler({
+    method: 'POST',
+    url: '/api/notes/restore',
+    headers: { authorization: 'Bearer b.test.token' },
+    query: {},
+    body: { id: noteId, ownerId: userB, contentSha256: '0'.repeat(64) },
+  }, response);
+  assert.equal(response.statusCode, 409);
+  assert.deepEqual(response.body, { error: 'RESTORE_COPY_MISMATCH' });
+  assert.deepEqual(operations, ['note_restore_copies']);
 });

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import config from '../aleph.config.json' with { type: 'json' };
 import { createLoginVerifier } from '../src/verify-login.mjs';
@@ -67,6 +67,10 @@ function requestBody(request) {
   }
 }
 
+function contentSha256(content) {
+  return createHash('sha256').update(content, 'utf8').digest('hex');
+}
+
 function noteInput(body, { allowId = false } = {}) {
   if (!body || typeof body.title !== 'string' || typeof body.body !== 'string') return null;
   const title = body.title.trim();
@@ -90,6 +94,32 @@ function requestResourceId(request) {
     return 'announcements';
   }
   return 'notes';
+}
+
+function isRestoreRoute(request) {
+  if (request.query?.restore === '1') return true;
+  const rawUrl = request.url ?? request.originalUrl ?? request.path;
+  if (typeof rawUrl !== 'string' || !rawUrl.trim()) return false;
+
+  try {
+    const parsed = new URL(rawUrl, 'https://internal.invalid');
+    return parsed.pathname.replace(/\/$/u, '') === '/api/notes/restore';
+  } catch {
+    return false;
+  }
+}
+
+function restoreRequestInput(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)
+      || typeof body.id !== 'string' || typeof body.ownerId !== 'string'
+      || typeof body.contentSha256 !== 'string') return null;
+  const id = body.id.trim().toLowerCase();
+  const ownerId = body.ownerId.trim().toLowerCase();
+  const contentSha256Value = body.contentSha256.trim().toLowerCase();
+  if (!UUID.test(id) || !UUID.test(ownerId) || !/^[a-f0-9]{64}$/u.test(contentSha256Value)) {
+    return null;
+  }
+  return { id, ownerId, contentSha256: contentSha256Value };
 }
 
 export function createNotesHandler({
@@ -163,6 +193,82 @@ export function createNotesHandler({
         return json(response, 403, { error: 'FORBIDDEN' });
       }
       return json(response, 405, { error: 'METHOD_NOT_ALLOWED' });
+    }
+
+    // Private-copy restore is a single-note, owner-bound write. It never
+    // updates/deletes another note and never writes an audit-history table.
+    if (isRestoreRoute(request)) {
+      if (request.method !== 'POST') {
+        response.setHeader('Allow', 'POST');
+        return json(response, 405, { error: 'METHOD_NOT_ALLOWED' });
+      }
+
+      const input = restoreRequestInput(requestBody(request));
+      if (!input) return json(response, 400, { error: 'INVALID_RESTORE_REQUEST' });
+      if (input.ownerId !== login.userId.toLowerCase()) {
+        return json(response, 403, { error: 'FORBIDDEN' });
+      }
+
+      const { data: copy, error: copyError } = await active.supabase
+        .from('note_restore_copies')
+        .select('id, owner_id, title, content, content_sha256')
+        .eq('id', input.id)
+        .maybeSingle();
+      if (copyError) return json(response, 502, { error: 'RESTORE_UNAVAILABLE' });
+      if (!copy) return json(response, 404, { error: 'RESTORE_COPY_NOT_FOUND' });
+
+      const copyId = typeof copy.id === 'string' ? copy.id.toLowerCase() : '';
+      const copyOwnerId = typeof copy.owner_id === 'string' ? copy.owner_id.toLowerCase() : '';
+      const copyContentHash = typeof copy.content_sha256 === 'string'
+        ? copy.content_sha256.toLowerCase() : '';
+      if (!UUID.test(copyId) || !UUID.test(copyOwnerId)
+          || copyId !== input.id || copyOwnerId !== input.ownerId
+          || copyOwnerId !== login.userId.toLowerCase()
+          || typeof copy.title !== 'string' || !copy.title.trim()
+          || copy.title.trim().length > 200
+          || typeof copy.content !== 'string' || !copy.content
+          || copy.content.length > 10000
+          || !/^[a-f0-9]{64}$/u.test(copyContentHash)
+          || copyContentHash !== contentSha256(copy.content)
+          || copyContentHash !== input.contentSha256) {
+        return json(response, 409, { error: 'RESTORE_COPY_MISMATCH' });
+      }
+
+      const { data: existing, error: existingError } = await active.supabase
+        .from('notes')
+        .select('id, owner_id')
+        .eq('id', input.id)
+        .maybeSingle();
+      if (existingError) return json(response, 502, { error: 'NOTES_UNAVAILABLE' });
+      if (existing && existing.owner_id?.toLowerCase() !== input.ownerId) {
+        return json(response, 403, { error: 'FORBIDDEN' });
+      }
+
+      const { data, error } = await active.supabase
+        .from('notes')
+        .upsert({
+          id: copy.id,
+          owner_id: copy.owner_id,
+          title: copy.title.trim(),
+          content: copy.content,
+        }, { onConflict: 'id' })
+        .select('id, owner_id, content')
+        .single();
+      if (error?.code === '23505') return json(response, 409, { error: 'NOTE_CONFLICT' });
+      if (error || !data) return json(response, 502, { error: 'NOTES_UNAVAILABLE' });
+
+      const restoredId = typeof data.id === 'string' ? data.id.toLowerCase() : '';
+      const restoredOwnerId = typeof data.owner_id === 'string' ? data.owner_id.toLowerCase() : '';
+      if (restoredId !== input.id || restoredOwnerId !== input.ownerId
+          || typeof data.content !== 'string'
+          || contentSha256(data.content) !== input.contentSha256) {
+        return json(response, 502, { error: 'RESTORE_INTEGRITY_FAILED' });
+      }
+      return json(response, 201, {
+        id: restoredId,
+        ownerId: restoredOwnerId,
+        contentSha256: input.contentSha256,
+      });
     }
 
     const id = routeId(request);
