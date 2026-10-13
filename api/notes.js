@@ -54,6 +54,16 @@ function publicNote(row) {
   return { id: row.id, title: row.title, body: row.content };
 }
 
+function requestResourceId(request) {
+  const header = request.headers?.['x-resource-id'] ?? request.headers?.['X-Resource-ID'] ?? request.headers?.['x-resource'];
+  const value = Array.isArray(header) ? header[0] : header;
+  if (value) return String(value).trim().toLowerCase();
+  if (request.query?.type === 'announcements' || request.query?.resource === 'announcements') {
+    return 'announcements';
+  }
+  return 'notes';
+}
+
 export function createNotesHandler({
   appConfig = config,
   env = process.env,
@@ -96,15 +106,36 @@ export function createNotesHandler({
   }
 
   return async function notesHandler(request, response) {
+    const currentResource = requestResourceId(request);
     response.setHeader('Cache-Control', 'no-store');
     response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('Content-Type', 'application/json; charset=utf-8');
+    response.setHeader('X-Resource-ID', currentResource);
 
     const active = getRuntime();
     if (!active) return json(response, 503, { error: 'NOTES_SERVICE_NOT_CONFIGURED' });
 
     const login = await active.verifyLogin(authorizationHeader(request));
     if (!login) return json(response, 401, { error: 'AUTH_REQUIRED' });
+
+    // 알 수 없는 다른 구역 요청 거부 (메뉴 우회 직접 API 요청 방어)
+    if (currentResource !== 'notes' && currentResource !== 'announcements') {
+      return json(response, 403, { error: 'FORBIDDEN' });
+    }
+
+    // 강사 공지 자원: 공지 읽기는 허용, 수정은 검증된 강사만 허용 (요청 본문/헤더의 role은 신뢰하지 않음)
+    if (currentResource === 'announcements') {
+      if (request.method === 'GET') {
+        return json(response, 200, [
+          { id: 'announcement-01', title: '강사 공지: 과제 안내', body: '8단계 마이크로세그멘테이션 구역 분리 적용', resourceId: 'announcements' },
+        ]);
+      }
+      const isVerifiedInstructor = Boolean(login.kind === 'instructor' || login.role === 'instructor' || login.identity === 'instructor');
+      if (!isVerifiedInstructor) {
+        return json(response, 403, { error: 'FORBIDDEN' });
+      }
+      return json(response, 405, { error: 'METHOD_NOT_ALLOWED' });
+    }
 
     const id = routeId(request);
     if (id !== null && !UUID.test(id)) return json(response, 400, { error: 'INVALID_NOTE_ID' });
@@ -127,7 +158,7 @@ export function createNotesHandler({
         .maybeSingle();
       if (error) return json(response, 502, { error: 'NOTES_UNAVAILABLE' });
       if (!data) return json(response, 404, { error: 'NOTE_NOT_FOUND' });
-      if (data.owner_id && data.owner_id !== login.userId) {
+      if (data.owner_id !== login.userId) {
         return json(response, 403, { error: 'FORBIDDEN' });
       }
       return json(response, 200, publicNote(data));
@@ -158,7 +189,7 @@ export function createNotesHandler({
         .maybeSingle();
       if (existingError) return json(response, 502, { error: 'NOTES_UNAVAILABLE' });
       if (!existing) return json(response, 404, { error: 'NOTE_NOT_FOUND' });
-      if (existing.owner_id && existing.owner_id !== login.userId) {
+      if (existing.owner_id !== login.userId) {
         return json(response, 403, { error: 'FORBIDDEN' });
       }
 
@@ -182,7 +213,7 @@ export function createNotesHandler({
         .maybeSingle();
       if (existingError) return json(response, 502, { error: 'NOTES_UNAVAILABLE' });
       if (!existing) return json(response, 404, { error: 'NOTE_NOT_FOUND' });
-      if (existing.owner_id && existing.owner_id !== login.userId) {
+      if (existing.owner_id !== login.userId) {
         return json(response, 403, { error: 'FORBIDDEN' });
       }
 

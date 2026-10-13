@@ -106,13 +106,14 @@
       cancelEdit.hidden = true;
     };
 
-    const api = async (path = '', options = {}) => {
+    const api = async (path = '', options = {}, resourceId = 'notes') => {
       if (!session?.access_token) throw new Error('로그인이 필요합니다.');
       const response = await fetch(`/api/notes${path}`, {
         ...options,
         cache: 'no-store',
         headers: {
           'Content-Type': 'application/json',
+          'X-Resource-ID': resourceId,
           Authorization: `Bearer ${session.access_token}`,
           ...options.headers,
         },
@@ -121,6 +122,9 @@
       if (!response.ok) throw new Error(body?.error ?? `자료 요청 실패 (HTTP ${response.status})`);
       return body;
     };
+
+    // 강사 공지 조회용 자원 ID (화면 메뉴 변경 없이 서버 요청 구별 인터페이스 제공)
+    const fetchAnnouncements = async () => api('?type=announcements', {}, 'announcements');
 
     const loadNotes = async () => {
       noteError.textContent = '';
