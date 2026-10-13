@@ -34,6 +34,7 @@ test('검증된 사본의 복원 버전과 변경 범위만 미리 보여 준다
   });
 
   assert.equal(preview.restoreVersion, 'safe-before-incident-2026-10-13');
+  assert.equal(preview.safePolicySha256, safeSnapshot.policySha256);
   assert.deepEqual(preview.changeScope, { added: 1, removed: 0, changed: 1, total: 2 });
   assert.deepEqual(preview.changes, [
     { path: '/trial', kind: 'added' },
@@ -77,6 +78,8 @@ test('복원 계획은 변경 범위를 먼저 보여 주고 서비스 규칙과
   });
 
   assert.equal(plan.restoreVersion, 'safe-before-incident-2026-10-13');
+  assert.equal(plan.safePolicySha256, safeSnapshot.policySha256);
+  assert.equal(plan.currentPolicySha256, policySha256(currentTestPolicy.policy));
   assert.deepEqual(plan.changeScope, { added: 1, removed: 0, changed: 1, total: 2 });
   assert.deepEqual(plan.changes, [
     { path: '/policy/trial', kind: 'added' },
@@ -122,6 +125,43 @@ test('복원은 확인 없이 적용되지 않고 오래된 계획도 거부한�
       safeSnapshot,
       trustedDigest: safeSnapshot.policySha256,
       currentTestPolicy: { ...currentTestPolicy, policy: { ...safePolicy, extra: true } },
+      plan,
+      confirmation: true,
+    }),
+    error => error.code === 'restore_plan_stale',
+  );
+});
+
+test('복원 직전에 사본 버전이나 현재 시험 정책이 바뀌면 쓰기 전에 중단한다', () => {
+  const currentTestPolicy = {
+    policy: { ...safePolicy, zones: { ...safePolicy.zones, notes: 'owner_only' } },
+    serviceRules: { search: 'keep' },
+  };
+  const plan = createPolicyRestorePlan({
+    safeSnapshot,
+    trustedDigest: safeSnapshot.policySha256,
+    currentTestPolicy,
+  });
+
+  assert.throws(
+    () => restoreTestPolicy({
+      safeSnapshot: { ...safeSnapshot, version: 'different-safe-version' },
+      trustedDigest: safeSnapshot.policySha256,
+      currentTestPolicy,
+      plan,
+      confirmation: true,
+    }),
+    error => error.code === 'restore_plan_stale',
+  );
+
+  assert.throws(
+    () => restoreTestPolicy({
+      safeSnapshot,
+      trustedDigest: safeSnapshot.policySha256,
+      currentTestPolicy: {
+        ...currentTestPolicy,
+        policy: { ...currentTestPolicy.policy, limits: { burstRead: 121 } },
+      },
       plan,
       confirmation: true,
     }),

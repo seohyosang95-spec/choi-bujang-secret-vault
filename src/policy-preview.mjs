@@ -61,6 +61,7 @@ export function verifySafePolicySnapshot(snapshot, trustedDigest) {
 
   return {
     version: snapshot.version,
+    policySha256: actual,
     policy: snapshot.policy,
   };
 }
@@ -114,6 +115,7 @@ export function previewPolicyChanges({ safeSnapshot, trustedDigest, currentPolic
   return {
     schema: PREVIEW_SCHEMA,
     restoreVersion: verified.version,
+    safePolicySha256: verified.policySha256,
     currentVersion: typeof currentVersion === 'string' ? currentVersion : null,
     changeScope: { added, removed, changed, total: changes.length },
     changes,
@@ -124,7 +126,9 @@ function restorePlanDigest(plan) {
   return policySha256({
     schema: plan.schema,
     restoreVersion: plan.restoreVersion,
+    safePolicySha256: plan.safePolicySha256,
     currentVersion: plan.currentVersion,
+    currentPolicySha256: plan.currentPolicySha256,
     changeScope: plan.changeScope,
     changes: plan.changes,
     preservedTopLevel: plan.preservedTopLevel,
@@ -165,7 +169,9 @@ export function createPolicyRestorePlan({
   const plan = {
     schema: RESTORE_PLAN_SCHEMA,
     restoreVersion: preview.restoreVersion,
+    safePolicySha256: preview.safePolicySha256,
     currentVersion: preview.currentVersion,
+    currentPolicySha256: policySha256(currentTestPolicy.policy),
     changeScope: preview.changeScope,
     changes: prefixedChanges(preview.changes),
     preservedTopLevel: Object.keys(currentTestPolicy)
@@ -204,6 +210,10 @@ export function restoreTestPolicy({
   if (confirmation !== true) fail('restore_confirmation_required');
 
   const verified = verifySafePolicySnapshot(safeSnapshot, trustedDigest);
+  if (verified.version !== expectedPlan.restoreVersion
+      || verified.policySha256 !== expectedPlan.safePolicySha256) {
+    fail('restore_plan_stale');
+  }
   const restored = structuredClone(currentTestPolicy);
   restored.policy = structuredClone(verified.policy);
   return restored;

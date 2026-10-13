@@ -28,7 +28,7 @@
 - 탐지기(`src/detect.mjs`)는 같은 확인된 `identity.sub`의 GET 사건이 10분 안에 120건을 초과할 때만 한 대상에 대해 `propose_revocation`과 `burst_read`를 제안합니다. 정상 사건은 `observe`로 남기며 실제 회수나 기기 권한 변경은 수행하지 않습니다.
 - `/data.json`은 빈 목록(`{"notes": []}`)을 유지하며 빌드 시 `/aleph.json`이 자동 생성됩니다.
 - 정책 복원 미리보기(`npm run policy:preview`)는 별도 신뢰 SHA-256으로 검증된 안전 정책 사본과 현재 시험 정책의 변경 경로·종류만 읽기 전용으로 보여 줍니다. 사본 누락·검증 실패·시험 정책 누락 시 중단하며 운영 정책을 수정하지 않습니다.
-- 시험 정책 복원(`npm run policy:restore`)은 먼저 `planSha256`, 복원 버전, 변경 범위를 보여 줍니다. `--confirm <planSha256>`를 다시 전달한 경우에만 시험 정책의 `policy` 구역을 복원하고, `serviceRules`·`auditHistory` 등 나머지 최상위 항목은 그대로 보존합니다. 운영 정책에 쓰는 경로·API는 없습니다.
+- 시험 정책 복원(`npm run policy:restore`)은 먼저 `planSha256`, 복원 버전, 변경 범위를 보여 줍니다. `--confirm <planSha256>`를 다시 전달하면 복원 직전에 안전 사본·별도 신뢰 다이제스트·현재 시험 정책을 디스크에서 다시 읽고 모두 재검증합니다. 사본이 없거나 검증에 실패하거나 처음 표시한 버전·해시·변경 범위와 달라지면 쓰기 전에 중단합니다. 확인된 경우에만 시험 정책의 `policy` 구역을 복원하고, `serviceRules`·`auditHistory` 등 나머지 최상위 항목은 그대로 보존합니다. 운영 정책에 쓰는 경로·API는 없습니다.
 - 비공개 메모 사본 복원 서비스는 `POST /api/notes/restore`입니다. 인증된 시험 계정 B가 `{ "id": "<메모 UUID>", "ownerId": "<B 사용자 UUID>", "contentSha256": "<64자리 SHA-256>" }`만 보내면 서버가 비공개 `note_restore_copies` 사본의 ID·소유자·내용 해시를 모두 대조한 뒤 지정한 한 건만 `notes`에 복원 저장합니다. 다른 메모와 감사 기록은 조회·수정하지 않습니다. 사본 테이블 준비 SQL은 `supabase/stage-11-restore.sql`에 있습니다.
 
 ## 판정기 및 가상 사건 확인 순서
