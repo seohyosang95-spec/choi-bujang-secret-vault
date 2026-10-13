@@ -7,6 +7,66 @@ export const RULE_IDS = Object.freeze([
   'zone_isolation',
 ]);
 
+const REQUEST_KEYS = Object.freeze([
+  'schema', 'requestId', 'classId', 'projectId', 'subjectId', 'deviceId',
+  'service', 'method', 'path', 'route', 'queryLength', 'querySha256', 'at',
+  'policyRevision', 'deviceRegistered', 'stepUp', 'recentEvents', 'signals',
+]);
+
+const stringValue = value => typeof value === 'string' ? value : undefined;
+const numberValue = value => typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+function normalizeStepUp(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  return {
+    verified: value.verified === true,
+    authAgeSeconds: value.authAgeSeconds === null ? null : numberValue(value.authAgeSeconds),
+  };
+}
+
+function normalizeRecentEvents(value) {
+  if (!Array.isArray(value)) return undefined;
+  return value.slice(0, 12).map(event => {
+    if (!event || typeof event !== 'object' || Array.isArray(event)) return {};
+    return {
+      kind: stringValue(event.kind),
+      ageSeconds: numberValue(event.ageSeconds),
+      count: numberValue(event.count),
+    };
+  });
+}
+
+function normalizeSignals(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  return {
+    source: stringValue(value.source),
+    region: stringValue(value.region),
+    network: stringValue(value.network),
+    hour: numberValue(value.hour),
+  };
+}
+
+/**
+ * Keep only the public decision-contract fields supplied by the verified
+ * engine. Sensitive or user-controlled extras such as tokens, note bodies,
+ * roles, and real names are deliberately not retained or passed to rules.
+ */
+export function normalizeDecisionRequest(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
+
+  const normalized = {};
+  for (const key of REQUEST_KEYS) {
+    if (!(key in input)) continue;
+    if (key === 'stepUp') normalized[key] = normalizeStepUp(input[key]);
+    else if (key === 'recentEvents') normalized[key] = normalizeRecentEvents(input[key]);
+    else if (key === 'signals') normalized[key] = normalizeSignals(input[key]);
+    else if (key === 'deviceRegistered') normalized[key] = input[key] === true;
+    else if (key === 'queryLength' || key === 'policyRevision') normalized[key] = numberValue(input[key]);
+    else normalized[key] = stringValue(input[key]);
+  }
+  return normalized;
+}
+
 /**
  * 엔진이 검증해 넘긴 신호(signals)의 출처를 확인하고 정제합니다.
  * - 신뢰할 수 있는 엔진 출처(judge_fixture 등)가 아니거나 출처가 불명확한 경우,
@@ -270,14 +330,16 @@ export function validateZoneAccess(request) {
 }
 
 export async function decide(request) {
+  const safeRequest = normalizeDecisionRequest(request);
+
   // 1. 가상 접속 정보 출처 검사
-  const signals = extractVerifiedSignals(request);
+  const signals = extractVerifiedSignals(safeRequest);
 
   // 2. 6단계 기존 기기 등록 규칙 (미등록 기기 거부)
-  if (request.deviceRegistered !== true) {
+  if (safeRequest.deviceRegistered !== true) {
     return {
       schema: 'aleph.decision.v1',
-      requestId: request.requestId,
+      requestId: safeRequest.requestId,
       decision: 'deny',
       reasonCode: 'device_not_registered',
       ruleIds: ['device_registered'],
@@ -285,15 +347,15 @@ export async function decide(request) {
   }
 
   // 3. 7단계 복합 이상 접속 규칙 (추가 본인 확인 요구)
-  if (isSuspiciousAccess(request, signals)) {
-    const isStepUpVerified = request.stepUp?.verified === true
-      && typeof request.stepUp.authAgeSeconds === 'number'
-      && request.stepUp.authAgeSeconds <= 900;
+  if (isSuspiciousAccess(safeRequest, signals)) {
+    const isStepUpVerified = safeRequest.stepUp?.verified === true
+      && typeof safeRequest.stepUp.authAgeSeconds === 'number'
+      && safeRequest.stepUp.authAgeSeconds <= 900;
 
     if (!isStepUpVerified) {
       return {
         schema: 'aleph.decision.v1',
-        requestId: request.requestId,
+        requestId: safeRequest.requestId,
         decision: 'step_up',
         reasonCode: 'step_up_required',
         ruleIds: ['step_up_required'],
@@ -302,11 +364,11 @@ export async function decide(request) {
   }
 
   // 4. 8단계 구역 분리 규칙 (자기 메모 vs 타인 메모 / 공지 수정 / 알 수 없는 경로)
-  const zone = validateZoneAccess(request);
+  const zone = validateZoneAccess(safeRequest);
   if (!zone.allowed) {
     return {
       schema: 'aleph.decision.v1',
-      requestId: request.requestId,
+      requestId: safeRequest.requestId,
       decision: 'deny',
       reasonCode: zone.reasonCode,
       ruleIds: [zone.ruleId],
@@ -316,7 +378,7 @@ export async function decide(request) {
   // 5. 정상 접근 허용
   return {
     schema: 'aleph.decision.v1',
-    requestId: request.requestId,
+    requestId: safeRequest.requestId,
     decision: 'allow',
     reasonCode: 'approved',
     ruleIds: ['device_registered'],
