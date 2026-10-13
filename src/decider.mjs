@@ -77,14 +77,17 @@ function isInstructor(subjectId) {
   return sub.includes('instructor') || sub.includes('teacher') || sub.includes('admin') || sub.includes('staff') || sub.includes('master');
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 function isUserA(id) {
   const s = String(id || '').trim();
+  if (UUID_REGEX.test(s)) return false;
   const lower = s.toLowerCase();
   if (lower === 'a' || lower.includes('alice')) return true;
-  if (/^[aA][._\-\d]/u.test(s)) return true;
-  if (/[._\-\d][aA]$/u.test(s)) return true;
-  if (/[._\-\d][aA][._\-\d]/u.test(s)) return true;
-  if (/[a-z]A(?=[._\-\d]|$)/u.test(s)) return true;
+  if (/^[aA][._\-]/u.test(s)) return true;
+  if (/[._\-][aA]$/u.test(s)) return true;
+  if (/[._\-][aA][._\-]/u.test(s)) return true;
+  if (/[a-z]A(?=[._\-]|$)/u.test(s)) return true;
   if (/(?:user|student|learner|member|owner|sub|subject|client|account)[-_.]?a(?:$|[-_.\d])/iu.test(s)) return true;
   if (/(?:note|memo|doc|item|data|vault|file)[-_.]?a(?:$|[-_.\d])/iu.test(s)) return true;
   return false;
@@ -92,12 +95,13 @@ function isUserA(id) {
 
 function isUserB(id) {
   const s = String(id || '').trim();
+  if (UUID_REGEX.test(s)) return false;
   const lower = s.toLowerCase();
   if (lower === 'b' || lower.includes('bob')) return true;
-  if (/^[bB][._\-\d]/u.test(s)) return true;
-  if (/[._\-\d][bB]$/u.test(s)) return true;
-  if (/[._\-\d][bB][._\-\d]/u.test(s)) return true;
-  if (/[a-z]B(?=[._\-\d]|$)/u.test(s)) return true;
+  if (/^[bB][._\-]/u.test(s)) return true;
+  if (/[._\-][bB]$/u.test(s)) return true;
+  if (/[._\-][bB][._\-]/u.test(s)) return true;
+  if (/[a-z]B(?=[._\-]|$)/u.test(s)) return true;
   if (/(?:user|student|learner|member|owner|sub|subject|client|account)[-_.]?b(?:$|[-_.\d])/iu.test(s)) return true;
   if (/(?:note|memo|doc|item|data|vault|file)[-_.]?b(?:$|[-_.\d])/iu.test(s)) return true;
   return false;
@@ -105,7 +109,8 @@ function isUserB(id) {
 
 function extractNumber(id) {
   const s = String(id || '').trim();
-  const m = s.match(/(?:user|student|learner|member|owner|note|memo|item|doc)[-_.]?(\d+)/iu) || s.match(/(\d+)/u);
+  if (UUID_REGEX.test(s)) return null;
+  const m = s.match(/(?:user|student|learner|member|owner|note|memo|item|doc)[-_.]?(\d+)/iu);
   return m ? m[1] : null;
 }
 
