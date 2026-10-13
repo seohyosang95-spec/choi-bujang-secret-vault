@@ -100,8 +100,8 @@ export function extractVerifiedSignals(request) {
 }
 
 /**
- * 평소와 다른 시각, 처음 보는 네트워크, 급격한 대량 조회 등 복합 이상 접속 여부를 확인합니다.
- * 단일 지역 정보만으로 영구 차단하지 않고 복합 요인을 검사합니다.
+ * 처음 보는 네트워크와 갑작스러운 대량 조회가 함께 나타나는 복합 이상 접속만 확인합니다.
+ * 지역이나 시각 하나만으로는 의심 사건으로 확정하지 않습니다.
  *
  * @param {Record<string, any>} request
  * @param {{ verified: boolean, region: string | null, network: string | null, hour: number | null }} signals
@@ -115,16 +115,13 @@ export function isSuspiciousAccess(request, signals) {
   // 1. 처음 보는 네트워크 (unusual)
   const isUnusualNetwork = signals.network === 'unusual';
 
-  // 2. 평소와 다른 시각 (새벽 시간대 등)
-  const isUnusualHour = typeof signals.hour === 'number' && (signals.hour < 6 || signals.hour > 22);
-
-  // 3. 갑자기 많은 자료를 읽거나 이상 신호가 누적된 사건
-  const hasRiskEvents = Array.isArray(request.recentEvents) && request.recentEvents.some(
-    (e) => (typeof e.count === 'number' && e.count >= 10) || e.kind === 'risk_signal',
+  // 2. 갑작스러운 다량 조회 (한 사건의 count가 10건 이상)
+  const hasBurstRead = Array.isArray(request.recentEvents) && request.recentEvents.some(
+    (e) => typeof e.count === 'number' && e.count >= 10,
   );
 
-  // 복합 사건: 처음 보는 네트워크 + (이상 시각 또는 원격 지역) + 대량 조회 이상 징후
-  return isUnusualNetwork && (isUnusualHour || signals.region === 'foreign') && hasRiskEvents;
+  // 복합 사건: 처음 보는 네트워크 + 갑작스러운 다량 조회
+  return isUnusualNetwork && hasBurstRead;
 }
 
 const FUNCTION_KEYWORDS = new Set([
