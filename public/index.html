@@ -117,10 +117,6 @@
 
     let session = null;
     let deviceApproved = false;
-    try {
-      const stored = localStorage.getItem('vault_session');
-      if (stored) session = JSON.parse(stored);
-    } catch {}
 
     const resetEditor = () => {
       noteForm.reset();
@@ -306,7 +302,6 @@
           throw new Error(body?.error ?? '로그인에 실패했습니다.');
         }
         session = body.session;
-        try { localStorage.setItem('vault_session', JSON.stringify(session)); } catch {}
         await renderSession(session);
       } catch (error) {
         loginError.textContent = error.message;
@@ -319,7 +314,6 @@
     document.querySelector('#logout').addEventListener('click', async () => {
       noteError.textContent = '';
       session = null;
-      try { localStorage.removeItem('vault_session'); } catch {}
       try {
         await fetch('/api/auth', {
           method: 'POST',

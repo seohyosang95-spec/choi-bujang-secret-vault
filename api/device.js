@@ -33,7 +33,7 @@ export function createDeviceHandler({
     try { parsedUrl = new URL(supabaseUrl); } catch { return null; }
     if (parsedUrl.protocol !== 'https:' || parsedUrl.username || parsedUrl.password
         || parsedUrl.pathname !== '/' || parsedUrl.search || parsedUrl.hash
-        || appConfig.identityProvider?.issuer !== `${parsedUrl.origin}/auth/v1`) return null;
+        || appConfig.identityProvider?.issuer !== parsedUrl.origin + '/auth/v1') return null;
     try {
       const supabase = createSupabaseClient(parsedUrl.href, supabaseSecretKey, CLIENT_OPTIONS);
       const verifyLogin = createVerifier({ config: appConfig, supabaseSecretKey, supabaseClient: supabase });
