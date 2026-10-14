@@ -16,7 +16,7 @@ export async function runAttackChecks(config) {
   }
 
   const staticResponse = await fetch(new URL('/data.json', app), {
-    redirect: 'error', signal: AbortSignal.timeout(10000),
+    redirect: 'error',
   });
   if (config.step === 1) {
     if (typeof config.sampleMarker !== 'string' || !config.sampleMarker) {
@@ -47,7 +47,7 @@ export async function runAttackChecks(config) {
   }
 
   const apiResponse = await fetch(new URL('/api/notes', app), {
-    redirect: 'error', signal: AbortSignal.timeout(10000),
+    redirect: 'error',
   });
   let apiVisible = false;
   let jsonDenied = false;
@@ -63,7 +63,7 @@ export async function runAttackChecks(config) {
 
   if (config.step >= 10) {
     const deviceResponse = await fetch(new URL('/api/device/approval', app), {
-      redirect: 'error', signal: AbortSignal.timeout(10000),
+      redirect: 'error',
     });
     let deviceDenied = false;
     try {
