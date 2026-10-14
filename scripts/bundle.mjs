@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -33,7 +33,13 @@ try {
   if (!changedFiles.length) fail('마지막 커밋에 바뀐 파일이 없습니다.');
   const config = fromCommit('aleph.config.json');
   const repoUrl = normalizedRepo(config.repoUrl);
-  const notes = JSON.parse(readFileSync(join(root, 'bundle-notes.json'), 'utf8'));
+  const notesPath = join(root, 'bundle-notes.json');
+  const notes = existsSync(notesPath)
+    ? JSON.parse(readFileSync(notesPath, 'utf8'))
+    : {
+      explanation: '실행 기록이 없는 점검은 요청하지 않고 not_run으로 구분합니다. 실제 API 결과와 미실행 상태를 분리하며, 본문과 비밀값은 제출하지 않습니다.',
+      blockedAt: null,
+    };
   if (!Number.isInteger(config.step) || config.step < 1 || config.step > 12) fail('aleph.config.json의 step을 확인해 주세요.');
   if (config.step >= 3 && (!config.identityProvider || typeof config.identityProvider !== 'object'
       || ['issuer', 'audience', 'jwksUrl'].some((key) => typeof config.identityProvider[key] !== 'string'
