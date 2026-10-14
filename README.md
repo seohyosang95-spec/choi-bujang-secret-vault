@@ -1,6 +1,6 @@
-# BYTE BACK 방어전 11단계 저장점
+# BYTE BACK 방어전 12단계 저장점
 
-이 저장소는 자료마다 갈 수 있는 구역을 분리하고, 검증된 비공개 메모 사본에서 B의 지정 메모 한 건만 복원하며, 서버 승인 기기에서만 자료실을 여는 11단계 상태입니다.
+이 저장소는 자료마다 갈 수 있는 구역을 분리하고, 검증된 비공개 메모 사본에서 B의 지정 메모 한 건만 복원하며, 서버 승인 기기와 실측 기록을 함께 확인하는 12단계 상태입니다.
 
 ## 현재 작동하는 기능
 
@@ -24,7 +24,7 @@
     - 일반 학생의 강사 공지 읽기: `decision: 'allow'`, `reasonCode: 'approved'`
     - `:id` 깊이의 기능 경로(`/notes/export` 등): `decision: 'deny'`, `reasonCode: 'unknown_route'`
     - 알 수 없는 경로 및 쿼리 우회 경로: `decision: 'deny'`, `reasonCode: 'unknown_route'`
-- `aleph.config.json`에 원본 자료 API의 HTTPS 주소(`originalApiUrl`) 및 step 11이 등록되어 있습니다.
+- `aleph.config.json`에 원본 자료 API의 HTTPS 주소(`originalApiUrl`) 및 step 12가 등록되어 있습니다.
 - 탐지기(`src/detect.mjs`)는 같은 확인된 `identity.sub`의 GET 사건이 10분 안에 120건을 초과할 때만 한 대상에 대해 `propose_revocation`과 `burst_read`를 제안합니다. 정상 사건은 `observe`로 남기며 실제 회수나 기기 권한 변경은 수행하지 않습니다.
 - `/data.json`은 빈 목록(`{"notes": []}`)을 유지하며 빌드 시 `/aleph.json`이 자동 생성됩니다.
 - 정책 복원 미리보기(`npm run policy:preview`)는 별도 신뢰 SHA-256으로 검증된 안전 정책 사본과 현재 시험 정책의 변경 경로·종류만 읽기 전용으로 보여 줍니다. 사본 누락·검증 실패·시험 정책 누락 시 중단하며 운영 정책을 수정하지 않습니다.
@@ -34,6 +34,31 @@
 - `GET/POST /api/device/approval`은 로그인한 학생의 승인 상태를 서버 등록부에서 읽습니다. 첫 요청은 `pending` 등록만 만들고, 승인 버튼은 권한을 부여하지 않습니다. 서버는 브라우저 식별자를 발급하거나 저장하지 않고 요청 특성의 일방향 지문만 등록부에 저장합니다. 승인 상태와 보호 자료만 JSON으로 반환합니다.
 - 11단계 자료 API는 서버 등록부의 `approved` 상태가 확인된 학생 기기에서만 기존 메모·공지 구역을 엽니다. 승인 전에는 화면과 서버 API 모두 보호 자료를 반환하지 않습니다. 등록부 준비 SQL은 `supabase/stage-11-device-approval.sql`이며, 실제 승인은 브라우저가 아닌 운영자가 서버에서 수행합니다.
 - 로그인 세션은 페이지 메모리에서만 유지하며 브라우저 저장소에 세션·기기 식별자·승인 값을 쓰지 않습니다. 새로고침 후에는 다시 로그인하고 서버 승인 상태를 확인합니다.
+- `GET /api/ops`는 판정 규칙, 탐지·회수·복구의 현재 상태, 1~11단계 41종 시험 절차를 본문·토큰 없이 반환합니다. `/`의 **탈환 작전실**은 실제 API 응답을 받은 행만 `실측`으로 바꾸고 나머지는 `미실행`으로 유지합니다. 요청 ID는 앞부분만 가려 표시하며 응답에는 HTTP 상태, 안전한 오류 코드 또는 자료 건수만 남깁니다.
+
+## 12단계 탈환 작전실과 출처
+
+탈환 작전실은 로그인 후 열립니다. `요약 새로 확인`은 `/api/ops`의 읽기 전용 요약을 다시 읽고, `읽기 전용 실측 점검`은 승인된 세션의 내 자료 목록 허용 요청과 비로그인 자료 API 거부 요청만 실제로 호출합니다. 메모 본문·토큰·서비스 키·기기 식별자는 화면과 제출 묶음에 넣지 않습니다. 실행되지 않은 나머지 41종 시험은 임의로 통과 처리하지 않습니다.
+
+판정기와 탐지 규칙의 출처는 제공된 **ALEPH SDP 엔진** 계약이며, 학생 작업은 다음 파일로 구분합니다.
+
+- 제공 엔진 계약: `docs/DECIDER_REQUEST.md`, `docs/DETECT_EVENTS.md`
+- 학생 판정기: `src/decider.mjs`
+- 학생 탐지기: `src/detect.mjs`
+- 작전실 요약·시험 절차: `src/ops-evidence.mjs`, `api/ops.js`, `public/index.html`
+
+재현 순서:
+
+```bash
+npm install
+npm run decider:test
+npm run detect:test
+npm run test:package
+npm run build -- --local
+npm run bundle
+```
+
+자료실 실행은 환경 변수를 준비한 뒤 `npx vercel dev`를 사용하고, 중지는 터미널에서 `Ctrl+C`를 누릅니다. 운영 배포는 검사가 끝난 커밋을 `main`에 반영하는 Git 연동 배포를 사용합니다. 되돌릴 때는 대상 커밋을 확인한 뒤 `git revert <커밋>`으로 새 되돌림 커밋을 만들고 다시 배포하며, 운영 정책·감사 기록을 직접 삭제하거나 `reset --hard`로 덮어쓰지 않습니다.
 
 ## 판정기 및 가상 사건 확인 순서
 
