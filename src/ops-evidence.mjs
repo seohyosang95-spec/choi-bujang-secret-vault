@@ -90,8 +90,21 @@ export function summarizeOpsEvidence(evidence = []) {
   };
 }
 
-export function createOpsSummary({ restoreRoute = null } = {}) {
-  const checkSummary = summarizeOpsEvidence();
+export function createOpsSummary({ restoreRoute = null, evidence = [] } = {}) {
+  const checkSummary = summarizeOpsEvidence(evidence);
+  const counts = {
+    total: checkSummary.total,
+    executed: checkSummary.executed,
+    passed: checkSummary.passed,
+    failed: checkSummary.failed,
+    unexecuted: checkSummary.unexecuted,
+  };
+  const serverRecord = {
+    counts,
+    checks: checkSummary.checks
+      .filter(item => item.actual)
+      .map(item => ({ id: item.id, ...item.actual })),
+  };
   return {
     schema: OPS_SCHEMA,
     source: {
@@ -121,13 +134,8 @@ export function createOpsSummary({ restoreRoute = null } = {}) {
       restoreRoute,
       changedScope: null,
     },
-    counts: {
-      total: checkSummary.total,
-      executed: checkSummary.executed,
-      passed: checkSummary.passed,
-      failed: checkSummary.failed,
-      unexecuted: checkSummary.unexecuted,
-    },
+    counts,
+    serverRecord,
     checks: checkSummary.checks,
   };
 }
