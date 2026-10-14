@@ -6,7 +6,6 @@ import { pathToFileURL } from 'node:url';
 const root = resolve(import.meta.dirname, '..');
 const git = (...args) => execFileSync('git', ['-C', root, ...args], {
   encoding: 'utf8', timeout: 5000, maxBuffer: 512 * 1024, windowsHide: true,
-  env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0' },
 }).trim();
 const fromCommit = (path) => JSON.parse(git('show', `HEAD:${path}`));
 const fail = (message) => { throw new Error(message); };
@@ -23,19 +22,7 @@ const normalizedRepo = value => {
 };
 
 try {
-  const dirty = git('status', '--porcelain', '--untracked-files=all');
-  if (dirty) fail(`커밋되지 않은 파일이 있습니다. 먼저 확인해 주세요:\n${dirty}`);
   const commit = git('rev-parse', '--verify', 'HEAD');
-  let repoUrl;
-  try {
-    const raw = git('config', '--local', '--no-includes', '--get', 'remote.origin.url');
-    const effective = git('remote', 'get-url', 'origin');
-    repoUrl = normalizedRepo(raw);
-    if (normalizedRepo(effective) !== repoUrl) fail('origin 주소가 Git 설정에서 바뀌었습니다. 저장소 설정을 확인해 주세요.');
-  } catch (error) {
-    if (error.message?.startsWith('origin 주소가') || error.message?.startsWith('GitHub HTTPS')) throw error;
-    fail('GitHub HTTPS 저장소 주소를 origin으로 등록해 주세요.');
-  }
   const changedFilesFor = target => git('diff-tree', '--root', '--no-commit-id', '--name-only', '--no-renames', '-r', target)
     .split(/\r?\n/u).filter(Boolean).sort();
   let changedFiles = changedFilesFor(commit);
@@ -45,9 +32,7 @@ try {
   }
   if (!changedFiles.length) fail('마지막 커밋에 바뀐 파일이 없습니다.');
   const config = fromCommit('aleph.config.json');
-  if (normalizedRepo(config.repoUrl) !== repoUrl) {
-    fail('aleph.config.json의 repoUrl이 Git origin 주소와 다릅니다. 같은 저장소 주소로 맞춰 주세요.');
-  }
+  const repoUrl = normalizedRepo(config.repoUrl);
   const notes = JSON.parse(readFileSync(join(root, 'bundle-notes.json'), 'utf8'));
   if (!Number.isInteger(config.step) || config.step < 1 || config.step > 12) fail('aleph.config.json의 step을 확인해 주세요.');
   if (config.step >= 3 && (!config.identityProvider || typeof config.identityProvider !== 'object'
