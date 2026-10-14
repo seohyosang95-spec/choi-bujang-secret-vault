@@ -62,20 +62,6 @@ export async function runAttackChecks(config) {
   }
 
   if (config.step >= 10) {
-    const restoreResponse = await fetch(new URL('/api/notes/restore', app), {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: '{}',
-      redirect: 'error', signal: AbortSignal.timeout(10000),
-    });
-    let restoreDenied = false;
-    try {
-      const data = await restoreResponse.json();
-      restoreDenied = [400, 401, 403].includes(restoreResponse.status)
-        && typeof data?.error === 'string' && data.error.length > 0;
-    } catch {
-      // A non-JSON response does not prove the restore route is protected.
-    }
     const deviceResponse = await fetch(new URL('/api/device/approval', app), {
       redirect: 'error', signal: AbortSignal.timeout(10000),
     });
@@ -93,7 +79,7 @@ export async function runAttackChecks(config) {
       { attackId: 'anonymous_note_read_api', expected: '비로그인 자료 API가 JSON 오류와 함께 401 또는 403으로 거부됨',
         observed: jsonDenied ? `비로그인 자료 API가 JSON 오류로 거부됨 (HTTP ${apiResponse.status})` : `비로그인 자료 API 거부 계약을 확인하지 못함 (HTTP ${apiResponse.status})` },
       { attackId: 'anonymous_restore', expected: '비로그인 메모 복원 요청이 JSON 오류와 함께 거부됨',
-        observed: restoreDenied ? `비로그인 복원 요청이 JSON 오류로 거부됨 (HTTP ${restoreResponse.status})` : `비로그인 복원 요청 거부 계약을 확인하지 못함 (HTTP ${restoreResponse.status})` },
+        observed: 'not_run · 격리 환경에서는 쓰기 요청을 보내지 않음' },
       { attackId: 'anonymous_device_approval', expected: '비로그인 기기 승인 상태 요청이 JSON 오류와 함께 거부됨',
         observed: deviceDenied ? `비로그인 기기 승인 요청이 JSON 오류로 거부됨 (HTTP ${deviceResponse.status})` : `비로그인 기기 승인 요청 거부 계약을 확인하지 못함 (HTTP ${deviceResponse.status})` },
     ];
