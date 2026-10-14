@@ -18,7 +18,8 @@
     "POST /api/auth",
     "GET /api/device/approval",
     "POST /api/device/approval",
-    "GET /api/ops"
+    "GET /api/ops",
+    "POST /api/ops"
   ],
   "originalApiUrl": "https://zevnboqdbsrtnifytumy.supabase.co/rest/v1/notes",
   "restoreRoute": "POST /api/notes/restore"

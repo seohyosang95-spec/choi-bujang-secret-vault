@@ -310,53 +310,32 @@
       }
     };
 
-    const responseResult = (response, body, expected) => {
-      const statusOk = expected === 'allow' ? response.ok : [401, 403].includes(response.status);
-      const errorCode = body && typeof body.error === 'string' ? body.error : null;
-      if (statusOk) {
-        if (expected === 'allow' && Array.isArray(body)) return `통과 · HTTP ${response.status} · 자료 ${body.length}건(본문 비표시)`;
-        return `통과 · HTTP ${response.status}${errorCode ? ` · ${errorCode}` : ''}`;
-      }
-      return `실패 · HTTP ${response.status}${errorCode ? ` · ${errorCode}` : ''}`;
-    };
-
-    const runOpsProbe = async test => {
-      const requestId = `ops-${typeof crypto?.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`}`;
-      const checkedAt = new Date().toISOString();
-      try {
-        const options = { cache: 'no-store', headers: { 'X-Request-ID': requestId } };
-        let response;
-        let expected;
-        if (test.probe === 'authenticated-notes') {
-          expected = 'allow';
-          options.headers.Authorization = `Bearer ${session.access_token}`;
-          options.headers['X-Resource-ID'] = 'notes';
-          response = await fetch('/api/my/notes', options);
-        } else {
-          expected = 'deny';
-          response = await fetch('/api/notes', options);
-        }
-        const body = await response.json().catch(() => null);
-        const confirmedRequestId = response.headers.get('x-request-id') ?? requestId;
-        return { id: test.id, requestId: confirmedRequestId, checkedAt, httpStatus: response.status, result: responseResult(response, body, expected) };
-      } catch {
-        return { id: test.id, requestId, checkedAt, httpStatus: null, result: '실패 · API 응답 없음' };
-      }
-    };
-
     const runOpsChecks = async () => {
       if (!opsSummary || !session?.access_token) return;
       const probes = (opsSummary.checks ?? []).filter(item => item.probe);
       if (!probes.length) return;
       opsStatus.textContent = '읽기 전용 API를 확인하는 중입니다. 메모 본문은 화면에 쓰지 않습니다.';
-      const evidence = await Promise.all(probes.map(runOpsProbe));
-      const evidenceById = new Map(evidence.map(item => [item.id, item]));
-      const checks = opsSummary.checks.map(item => ({ ...item, actual: evidenceById.get(item.id) ?? item.actual, status: evidenceById.has(item.id) ? '실측' : item.status }));
-      const executed = checks.filter(item => item.actual);
-      const passed = executed.filter(item => item.actual.result.startsWith('통과')).length;
-      opsSummary = { ...opsSummary, checks, counts: { total: checks.length, executed: executed.length, passed, failed: executed.length - passed, unexecuted: checks.length - executed.length } };
-      renderOpsSummary();
-      opsStatus.textContent = `실측 완료 · 통과 ${passed} · 실패 ${executed.length - passed} · 미실행 ${checks.length - executed.length}`;
+      try {
+        const response = await fetch('/api/ops', {
+          method: 'POST',
+          cache: 'no-store',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ probeIds: probes.map(item => item.id) }),
+        });
+        const body = await response.json().catch(() => null);
+        if (!response.ok || body?.schema !== 'aleph.ops-room.v1') {
+          throw new Error(body?.error ?? '실측 결과를 서버에서 확인하지 못했습니다.');
+        }
+        opsSummary = body;
+        renderOpsSummary();
+        const counts = body.counts ?? {};
+        opsStatus.textContent = `실측 완료 · 통과 ${counts.passed ?? 0} · 실패 ${counts.failed ?? 0} · 미실행 ${counts.unexecuted ?? 0}`;
+      } catch (error) {
+        opsStatus.textContent = error.message;
+      }
     };
 
     const loadNotes = async () => {
