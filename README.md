@@ -24,7 +24,7 @@
     - 일반 학생의 강사 공지 읽기: `decision: 'allow'`, `reasonCode: 'approved'`
     - `:id` 깊이의 기능 경로(`/notes/export` 등): `decision: 'deny'`, `reasonCode: 'unknown_route'`
     - 알 수 없는 경로 및 쿼리 우회 경로: `decision: 'deny'`, `reasonCode: 'unknown_route'`
-- `aleph.config.json`에 원본 자료 API의 HTTPS 주소(`originalApiUrl`) 및 step 10이 등록되어 있습니다.
+- `aleph.config.json`에 원본 자료 API의 HTTPS 주소(`originalApiUrl`) 및 step 11이 등록되어 있습니다.
 - 탐지기(`src/detect.mjs`)는 같은 확인된 `identity.sub`의 GET 사건이 10분 안에 120건을 초과할 때만 한 대상에 대해 `propose_revocation`과 `burst_read`를 제안합니다. 정상 사건은 `observe`로 남기며 실제 회수나 기기 권한 변경은 수행하지 않습니다.
 - `/data.json`은 빈 목록(`{"notes": []}`)을 유지하며 빌드 시 `/aleph.json`이 자동 생성됩니다.
 - 정책 복원 미리보기(`npm run policy:preview`)는 별도 신뢰 SHA-256으로 검증된 안전 정책 사본과 현재 시험 정책의 변경 경로·종류만 읽기 전용으로 보여 줍니다. 사본 누락·검증 실패·시험 정책 누락 시 중단하며 운영 정책을 수정하지 않습니다.
@@ -33,6 +33,7 @@
 - 설치형 웹앱 설정은 `/manifest.webmanifest`이며 앱 이름·아이콘·오프라인 안내만 제공합니다. 설치 표시만으로 기기 승인을 끝내지 않습니다.
 - `GET/POST /api/device/approval`은 로그인한 학생의 승인 상태를 서버 등록부에서 읽습니다. 첫 요청은 `pending` 등록만 만들고, 승인 버튼은 권한을 부여하지 않습니다. 서버는 브라우저 식별자를 발급하거나 저장하지 않고 요청 특성의 일방향 지문만 등록부에 저장합니다. 승인 상태와 보호 자료만 JSON으로 반환합니다.
 - 11단계 자료 API는 서버 등록부의 `approved` 상태가 확인된 학생 기기에서만 기존 메모·공지 구역을 엽니다. 승인 전에는 화면과 서버 API 모두 보호 자료를 반환하지 않습니다. 등록부 준비 SQL은 `supabase/stage-11-device-approval.sql`이며, 실제 승인은 브라우저가 아닌 운영자가 서버에서 수행합니다.
+- 로그인 세션은 페이지 메모리에서만 유지하며 브라우저 저장소에 세션·기기 식별자·승인 값을 쓰지 않습니다. 새로고침 후에는 다시 로그인하고 서버 승인 상태를 확인합니다.
 
 ## 판정기 및 가상 사건 확인 순서
 
