@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import notesHandler, { createNotesHandler } from '../api/notes.js';
 
 const baseline = JSON.parse(await readFile(new URL('../package/baseline-functions.json', import.meta.url)));
-const implementedFunctions = ['api/notes.js', 'api/auth.js', 'api/device.js'];
+const implementedFunctions = ['api/notes.js', 'api/auth.js', 'api/device.js', 'api/ops.js'];
 
 test('패키징 함수 기준표는 시작 틀의 실제 API와 일치한다', async () => {
   const actual = (await readdir(new URL('../api/', import.meta.url)))

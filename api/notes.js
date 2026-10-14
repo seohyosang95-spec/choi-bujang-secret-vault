@@ -17,6 +17,14 @@ function json(response, status, body) {
   return response.status(status).json(body);
 }
 
+function requestId(request) {
+  const value = request.headers?.['x-request-id'] ?? request.headers?.['X-Request-ID'];
+  const candidate = Array.isArray(value) ? value[0] : value;
+  return typeof candidate === 'string' && /^[A-Za-z0-9._:-]{1,100}$/u.test(candidate)
+    ? candidate
+    : null;
+}
+
 function authorizationHeader(request) {
   const value = request.headers?.authorization ?? request.headers?.Authorization;
   return Array.isArray(value) ? value[0] : value;
@@ -170,6 +178,8 @@ export function createNotesHandler({
     response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('Content-Type', 'application/json; charset=utf-8');
     response.setHeader('X-Resource-ID', currentResource);
+    const currentRequestId = requestId(request);
+    if (currentRequestId) response.setHeader('X-Request-ID', currentRequestId);
 
     const active = getRuntime();
     if (!active) return json(response, 503, { error: 'NOTES_SERVICE_NOT_CONFIGURED' });
