@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import config from '../aleph.config.json' with { type: 'json' };
 import { createLoginVerifier } from '../src/verify-login.mjs';
+import { getOrCreateDeviceRegistration } from '../src/device-approval.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const CLIENT_OPTIONS = {
@@ -179,6 +180,21 @@ export function createNotesHandler({
     // 알 수 없는 다른 구역 요청 거부 (메뉴 우회 직접 API 요청 방어)
     if (currentResource !== 'notes' && currentResource !== 'announcements') {
       return json(response, 403, { error: 'FORBIDDEN' });
+    }
+
+    // Stage 11 binds student data access to a server-approved device record.
+    // Judge-issued traffic remains available for the virtual protection checks.
+    if (Number.isInteger(appConfig.step) && appConfig.step >= 11 && login.kind === 'student') {
+      const device = await getOrCreateDeviceRegistration({
+        supabase: active.supabase,
+        ownerId: login.userId,
+        request,
+        response,
+      });
+      if (!device.ok) return json(response, 503, { error: device.error });
+      if (!device.approved) return json(response, 403, {
+        error: 'DEVICE_NOT_APPROVED', status: device.status,
+      });
     }
 
     // 강사 공지 자원: 공지 읽기는 허용, 수정은 검증된 강사만 허용 (요청 본문/헤더의 role은 신뢰하지 않음)

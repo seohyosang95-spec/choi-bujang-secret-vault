@@ -1,0 +1,14 @@
+{
+  "name": "BYTE BACK 인증 자료실",
+  "short_name": "BYTE BACK",
+  "description": "승인된 기기에서만 보호 자료를 확인하는 설치형 자료실입니다. 오프라인에서는 보호 자료를 표시하지 않습니다.",
+  "lang": "ko",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#101a28",
+  "theme_color": "#101a28",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

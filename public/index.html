@@ -3,6 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="application-name" content="BYTE BACK 인증 자료실">
+  <meta name="theme-color" content="#101a28">
+  <link rel="manifest" href="/manifest.webmanifest">
   <title>BYTE BACK | 인증된 자료실</title>
   <style>
     :root { color-scheme: dark; font-family: system-ui, sans-serif; }
@@ -38,7 +41,7 @@
   <main>
     <div class="eyebrow">BYTE BACK · 3단계 로그인</div>
     <h1>인증된 자료실</h1>
-    <p>Supabase Auth로 로그인한 사용자만 서버 자료 API를 호출할 수 있습니다.</p>
+    <p>Supabase Auth로 로그인한 사용자만 서버 자료 API를 호출할 수 있습니다. 설치 표시만으로 기기 승인이 끝난 것은 아닙니다.</p>
 
     <section id="login-panel">
       <h2>이메일 로그인</h2>
@@ -55,6 +58,18 @@
         <strong id="session-state" class="session">로그인됨</strong>
         <button id="logout" class="secondary" type="button">로그아웃</button>
       </div>
+    </section>
+
+    <section id="device-panel" hidden>
+      <h2>기기 승인</h2>
+      <p id="offline-status" class="status" role="status" aria-live="polite"></p>
+      <p id="device-status" class="session" role="status" aria-live="polite">서버에 기기 승인 상태를 확인하는 중입니다.</p>
+      <p id="device-help">승인 전에는 보호 자료를 표시하지 않습니다. 승인 요청은 서버 등록부에 기록되고, 승인 버튼만으로 권한이 부여되지 않습니다.</p>
+      <div class="row">
+        <button id="request-device" type="button">기기 승인 요청</button>
+        <button id="refresh-device" class="secondary" type="button">상태 새로 확인</button>
+      </div>
+      <p id="device-error" class="status" role="alert" aria-live="polite"></p>
     </section>
 
     <section id="editor-panel" hidden>
@@ -83,6 +98,13 @@
     const loginError = document.querySelector('#login-error');
     const sessionPanel = document.querySelector('#session-panel');
     const sessionState = document.querySelector('#session-state');
+    const devicePanel = document.querySelector('#device-panel');
+    const deviceStatus = document.querySelector('#device-status');
+    const deviceHelp = document.querySelector('#device-help');
+    const deviceError = document.querySelector('#device-error');
+    const offlineStatus = document.querySelector('#offline-status');
+    const requestDevice = document.querySelector('#request-device');
+    const refreshDevice = document.querySelector('#refresh-device');
     const editorPanel = document.querySelector('#editor-panel');
     const noteForm = document.querySelector('#note-form');
     const noteId = document.querySelector('#note-id');
@@ -94,6 +116,7 @@
     const cancelEdit = document.querySelector('#cancel-edit');
 
     let session = null;
+    let deviceApproved = false;
     try {
       const stored = localStorage.getItem('vault_session');
       if (stored) session = JSON.parse(stored);
@@ -121,6 +144,69 @@
       const body = response.status === 204 ? null : await response.json().catch(() => null);
       if (!response.ok) throw new Error(body?.error ?? `자료 요청 실패 (HTTP ${response.status})`);
       return body;
+    };
+
+    const setProtectedVisibility = visible => {
+      editorPanel.hidden = !visible;
+      notesPanel.hidden = !visible;
+    };
+
+    const deviceApi = async (method = 'GET') => {
+      if (!session?.access_token) throw new Error('로그인이 필요합니다.');
+      if (!navigator.onLine) throw new Error('오프라인에서는 기기 승인 상태와 보호 자료를 확인할 수 없습니다.');
+      const response = await fetch('/api/device/approval', {
+        method,
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        ...(method === 'POST' ? { body: JSON.stringify({ action: 'request' }) } : {}),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error ?? `기기 승인 상태 확인 실패 (HTTP ${response.status})`);
+      return body?.deviceApproval;
+    };
+
+    const applyDeviceState = state => {
+      deviceApproved = state?.approved === true && state?.status === 'approved';
+      setProtectedVisibility(deviceApproved);
+      if (deviceApproved) {
+        deviceStatus.textContent = '이 기기는 서버 등록부에서 승인되었습니다.';
+        deviceHelp.textContent = '기기 승인이 확인되어 기존 자료실을 열었습니다.';
+        deviceStatus.className = 'session';
+        requestDevice.hidden = true;
+      } else if (state?.status === 'revoked') {
+        deviceStatus.textContent = '이 기기의 승인이 회수되었습니다.';
+        deviceHelp.textContent = '보호 자료는 다시 승인될 때까지 표시하지 않습니다.';
+        deviceStatus.className = 'status';
+        requestDevice.hidden = false;
+      } else {
+        deviceStatus.textContent = '승인 대기 중인 기기입니다.';
+        deviceHelp.textContent = '승인 전에는 보호 자료를 표시하지 않습니다. 승인 요청은 서버 등록부에 기록되고, 승인 버튼만으로 권한이 부여되지 않습니다.';
+        deviceStatus.className = 'status';
+        requestDevice.hidden = false;
+      }
+    };
+
+    const loadDeviceApproval = async (loadProtected = true) => {
+      deviceError.textContent = '';
+      try {
+        const state = await deviceApi('GET');
+        applyDeviceState(state);
+        if (loadProtected && deviceApproved) await loadNotes();
+      } catch (error) {
+        deviceApproved = false;
+        setProtectedVisibility(false);
+        deviceError.textContent = error.message;
+      }
+    };
+
+    const updateOfflineStatus = () => {
+      offlineStatus.textContent = navigator.onLine
+        ? '' : '오프라인 상태에서는 승인 확인과 보호 자료를 표시하지 않습니다.';
+      if (!navigator.onLine) setProtectedVisibility(false);
     };
 
     // 강사 공지 조회용 자원 ID (화면 메뉴 변경 없이 서버 요청 구별 인터페이스 제공)
@@ -185,15 +271,18 @@
       const signedIn = Boolean(session?.access_token);
       loginPanel.hidden = signedIn;
       sessionPanel.hidden = !signedIn;
-      editorPanel.hidden = !signedIn;
-      notesPanel.hidden = !signedIn;
+      devicePanel.hidden = !signedIn;
+      deviceApproved = false;
+      setProtectedVisibility(false);
       loginError.textContent = '';
       noteError.textContent = '';
+      deviceError.textContent = '';
       resetEditor();
       notesList.replaceChildren();
       if (signedIn) {
         sessionState.textContent = '로그인됨';
-        await loadNotes();
+        updateOfflineStatus();
+        await loadDeviceApproval();
       }
     };
 
@@ -240,6 +329,24 @@
       } catch {}
       await renderSession(null);
     });
+
+    requestDevice.addEventListener('click', async () => {
+      deviceError.textContent = '';
+      requestDevice.disabled = true;
+      try {
+        const state = await deviceApi('POST');
+        applyDeviceState(state);
+        if (deviceApproved) await loadNotes();
+      } catch (error) {
+        deviceError.textContent = error.message;
+      } finally {
+        requestDevice.disabled = false;
+      }
+    });
+
+    refreshDevice.addEventListener('click', () => loadDeviceApproval());
+    window.addEventListener('online', updateOfflineStatus);
+    window.addEventListener('offline', updateOfflineStatus);
 
     noteForm.addEventListener('submit', async event => {
       event.preventDefault();

@@ -4,6 +4,7 @@
 "buildCommand": "npm run build",
 "outputDirectory": "public",
 "rewrites": [
+  { "source": "/api/device/approval", "destination": "/api/device" },
   { "source": "/api/my/notes", "destination": "/api/notes" },
   { "source": "/api/notes/restore", "destination": "/api/notes?restore=1" },
   { "source": "/api/notes/:id", "destination": "/api/notes?id=:id" }

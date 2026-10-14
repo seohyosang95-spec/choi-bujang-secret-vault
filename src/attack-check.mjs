@@ -1,7 +1,7 @@
 // The student changes this check as each stage adds an attack to the same app.
 // Never return tokens, private keys, real names, or note bodies.
 export async function runAttackChecks(config) {
-  if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10].includes(config.step)) {
+  if (![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].includes(config.step)) {
     throw new Error('이 단계의 공격 점검을 src/attack-check.mjs에 구현해 주세요.');
   }
   let app;
@@ -61,7 +61,7 @@ export async function runAttackChecks(config) {
     // Only a JSON error proves the stage-three unauthenticated rejection contract.
   }
 
-  if (config.step === 10) {
+  if (config.step >= 10) {
     const restoreResponse = await fetch(new URL('/api/notes/restore', app), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -76,6 +76,17 @@ export async function runAttackChecks(config) {
     } catch {
       // A non-JSON response does not prove the restore route is protected.
     }
+    const deviceResponse = await fetch(new URL('/api/device/approval', app), {
+      redirect: 'error', signal: AbortSignal.timeout(10000),
+    });
+    let deviceDenied = false;
+    try {
+      const data = await deviceResponse.json();
+      deviceDenied = deviceResponse.status === 401
+        && typeof data?.error === 'string' && data.error.length > 0;
+    } catch {
+      // Only a JSON authentication error proves the approval route is protected.
+    }
     return [
       { attackId: 'anonymous_note_read_static', expected: '비로그인 요청에서 정적 가상 메모를 읽을 수 없음',
         observed: hidden ? '공개 data.json에 가상 메모가 없음' : `공개 data.json에 자료가 남아 있거나 응답을 확인할 수 없음 (HTTP ${staticResponse.status})` },
@@ -83,6 +94,8 @@ export async function runAttackChecks(config) {
         observed: jsonDenied ? `비로그인 자료 API가 JSON 오류로 거부됨 (HTTP ${apiResponse.status})` : `비로그인 자료 API 거부 계약을 확인하지 못함 (HTTP ${apiResponse.status})` },
       { attackId: 'anonymous_restore', expected: '비로그인 메모 복원 요청이 JSON 오류와 함께 거부됨',
         observed: restoreDenied ? `비로그인 복원 요청이 JSON 오류로 거부됨 (HTTP ${restoreResponse.status})` : `비로그인 복원 요청 거부 계약을 확인하지 못함 (HTTP ${restoreResponse.status})` },
+      { attackId: 'anonymous_device_approval', expected: '비로그인 기기 승인 상태 요청이 JSON 오류와 함께 거부됨',
+        observed: deviceDenied ? `비로그인 기기 승인 요청이 JSON 오류로 거부됨 (HTTP ${deviceResponse.status})` : `비로그인 기기 승인 요청 거부 계약을 확인하지 못함 (HTTP ${deviceResponse.status})` },
     ];
   }
 
