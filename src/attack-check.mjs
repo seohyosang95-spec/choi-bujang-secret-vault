@@ -15,6 +15,16 @@ export async function runAttackChecks(config) {
     throw new Error('aleph.config.json의 실제 배포 주소를 먼저 넣어 주세요.');
   }
 
+  if (config.step >= 12) {
+    const notRun = 'not_run · 이 점검 ID의 서버 실행 기록이 없어 요청하지 않음';
+    return [
+      { attackId: 'anonymous_note_read_static', expected: '비로그인 요청에서 정적 가상 메모를 읽을 수 없음', observed: notRun },
+      { attackId: 'anonymous_note_read_api', expected: '비로그인 자료 API가 JSON 오류와 함께 401 또는 403으로 거부됨', observed: notRun },
+      { attackId: 'anonymous_restore', expected: '비로그인 메모 복원 요청이 JSON 오류와 함께 거부됨', observed: notRun },
+      { attackId: 'anonymous_device_approval', expected: '비로그인 기기 승인 상태 요청이 JSON 오류와 함께 거부됨', observed: notRun },
+    ];
+  }
+
   const staticResponse = await fetch(new URL('/data.json', app), {
     redirect: 'error',
   });
