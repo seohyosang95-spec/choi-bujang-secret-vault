@@ -66,7 +66,6 @@ export function createDeviceHandler({
       supabase: active.supabase,
       ownerId: login.userId,
       request,
-      response,
     });
     if (!registration.ok) return json(response, 503, { error: registration.error });
     return json(response, 200, {

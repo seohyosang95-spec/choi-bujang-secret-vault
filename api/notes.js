@@ -189,7 +189,6 @@ export function createNotesHandler({
         supabase: active.supabase,
         ownerId: login.userId,
         request,
-        response,
       });
       if (!device.ok) return json(response, 503, { error: device.error });
       if (!device.approved) return json(response, 403, {

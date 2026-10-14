@@ -1,12 +1,12 @@
 -- Stage 11: server-side device approval records.
--- The browser receives only an HttpOnly cookie; the raw opaque value is never
--- stored in localStorage, returned in JSON, or written to this table.
+-- The browser receives only the approval status. The server stores a one-way
+-- digest of ordinary request characteristics; no browser identifier is issued.
 begin;
 
 create table if not exists public.device_registrations (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references auth.users(id),
-  device_token_hash text not null unique check (device_token_hash ~ '^[0-9a-f]{64}$'),
+  device_fingerprint_hash text not null check (device_fingerprint_hash ~ '^[0-9a-f]{64}$'),
   status text not null default 'pending' check (status in ('pending', 'approved', 'revoked')),
   requested_at timestamptz not null default now(),
   approved_at timestamptz,
@@ -16,6 +16,9 @@ create table if not exists public.device_registrations (
 
 create index if not exists device_registrations_owner_status_idx
   on public.device_registrations (owner_id, status);
+
+create unique index if not exists device_registrations_owner_fingerprint_uidx
+  on public.device_registrations (owner_id, device_fingerprint_hash);
 
 alter table public.device_registrations enable row level security;
 revoke all privileges on table public.device_registrations from public, anon, authenticated;

@@ -24,7 +24,8 @@ function responseRecorder() {
   };
 }
 
-function fakeSupabase({ registration = null, notes = [] } = {}) {
+function fakeSupabase({ registration = null, notes = [], onInsert } = {}) {
+  let deviceLookupCount = 0;
   return {
     from(table) {
       const operation = { table };
@@ -33,26 +34,31 @@ function fakeSupabase({ registration = null, notes = [] } = {}) {
         eq() { return query; },
         order() { return Promise.resolve({ data: notes, error: null }); },
         maybeSingle() {
-          if (table === 'device_registrations') return Promise.resolve({ data: registration, error: null });
+          if (table === 'device_registrations') {
+            deviceLookupCount += 1;
+            if (registration || deviceLookupCount === 1) {
+              return Promise.resolve({ data: registration, error: null });
+            }
+            return Promise.resolve({
+              data: { id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', status: 'pending' }, error: null,
+            });
+          }
           return Promise.resolve({ data: null, error: null });
         },
         insert(value) {
           operation.insert = value;
+          onInsert?.(value);
           return query;
         },
       };
-      if (table === 'device_registrations' && !registration) {
-        query.maybeSingle = () => Promise.resolve({
-          data: { id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', status: 'pending' }, error: null,
-        });
-      }
       return query;
     },
   };
 }
 
-test('기기 승인 요청은 HttpOnly 쿠키와 서버 pending만 만들고 키를 반환하지 않는다', async () => {
-  const supabase = fakeSupabase({ registration: null });
+test('기기 승인 요청은 서버 pending만 만들고 식별자를 반환하거나 저장하지 않는다', async () => {
+  let inserted;
+  const supabase = fakeSupabase({ registration: null, onInsert: value => { inserted = value; } });
   const handler = createDeviceHandler({
     appConfig,
     env: { SUPABASE_URL: 'https://student.supabase.co/', SUPABASE_SECRET_KEY: 'test-only' },
@@ -63,11 +69,8 @@ test('기기 승인 요청은 HttpOnly 쿠키와 서버 pending만 만들고 키
   await handler({ method: 'POST', headers: {}, body: { action: 'request' } }, response);
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.body, { deviceApproval: { approved: false, status: 'pending' } });
-  const cookie = response.headers.get('set-cookie');
-  assert.match(cookie, /HttpOnly/u);
-  assert.match(cookie, /Secure/u);
-  assert.match(cookie, /SameSite=Lax/u);
-  assert.doesNotMatch(JSON.stringify(response.body), /device_token|[A-Za-z0-9_-]{43}/u);
+  assert.match(inserted?.device_fingerprint_hash ?? '', /^[a-f0-9]{64}$/u);
+  assert.doesNotMatch(JSON.stringify(response.body), /fingerprint|identifier|key/u);
 });
 
 test('승인된 등록부 상태만 자료 API를 열고 승인 전에는 메모를 읽지 않는다', async () => {
